@@ -58,7 +58,20 @@ class SQL(object):
     _engine = None
 
     def __init__(self, config):
-        self._engine = config.engine
+        """
+        Pass in a dict that has required info in it for the plugin configuration.
+
+        The only required key is 'engine' Below is an example using an in memory
+        sqlite database:
+
+        {
+            'engine': "sqlite:///:memory:"
+        }
+
+        :param config: dictionary that contains required info for the plugin
+        :return:
+        """
+        self._engine = config['engine']
         self.engine = create_engine(self._engine, echo=False)
         Base.metadata.create_all(self.engine)
 
