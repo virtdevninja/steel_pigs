@@ -18,11 +18,7 @@ import unittest
 from plugins.providers.sql import ServerDataModel, SwitchInfo
 from plugins.providers.sql import SQL
 
-
-class Config(object):
-    engine = "sqlite:///:memory:"
-
-config = Config()
+config = {'engine': "sqlite:///:memory:"}
 
 class PigTests(unittest.TestCase):
     @classmethod
