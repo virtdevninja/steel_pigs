@@ -60,3 +60,8 @@ target/
 
 *.iml
 .idea/
+
+# Database files
+*.db
+*.sqlite
+*.dat
