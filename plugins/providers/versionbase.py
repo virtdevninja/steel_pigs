@@ -11,19 +11,28 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
+import abc
 
-# this should be in the form of:
-# from plugins.providers.sql import SQL
-PROVIDER_PLUGIN = {
-    "namespace": "plugins.providers.sql",
-    "class": "SQL",
-    "engine": "sqlite:///:memory:",
-}
 
-VERSION_PROVIDER_PLUGIN = {
-    "namespace": "plugins.providers.static_version",
-    "class": "StaticVersionProvider"
-}
+class VersionProviderBase(object):
+    __metaclass__ = abc.ABCMeta
 
-# the app key for the flask app. This can be anything, and should be random and private
-SECRET_KEY = "Some random string here for use with the flask_wtf forms."
+    @abc.abstractmethod
+    def get_latest_versions(self):
+        """
+        Returns the most recent versions and locations of the software projects
+        needed to make your systems run.
+
+        :return:
+        """
+        return
+
+    @abc.abstractmethod
+    def get_latest_ipxe(self, project):
+        """
+        This method is almost identical to get_software_versions_json() except
+        that it returns variables in iPXE script format.
+
+        :param project:
+        :return:
+        """

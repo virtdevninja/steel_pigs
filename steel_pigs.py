@@ -15,6 +15,7 @@
 import logging
 
 from flask import Flask, render_template, make_response, request, abort
+from flask import jsonify
 from flask_bootstrap import Bootstrap
 
 from pigs_app_settings.nav import nav
@@ -43,8 +44,41 @@ klass = getattr(
     server_data_provider_plugin,
     pigs_config.PROVIDER_PLUGIN["class"]
 )
+# This is to catch instances where a plugin does not have an
+# __init__ method that supports passing in the config dict
+try:
+    server_data_plugin = klass(pigs_config.PROVIDER_PLUGIN)
+except TypeError as te:
+    print te.message
+    raise SystemExit
 
-provider_plugin = klass(pigs_config.PROVIDER_PLUGIN)
+version_data_provider_plugin = __import__(
+    pigs_config.VERSION_PROVIDER_PLUGIN["namespace"],
+    fromlist=pigs_config.VERSION_PROVIDER_PLUGIN["class"]
+)
+del klass
+klass = getattr(
+    version_data_provider_plugin,
+    pigs_config.VERSION_PROVIDER_PLUGIN["class"]
+)
+
+try:
+    version_data_plugin = klass(pigs_config.VERSION_PROVIDER_PLUGIN)
+except TypeError as te:
+    print te.message
+    raise SystemExit
+
+
+# yucky but I couldnt think of a better way to solve this.
+# for unit testing to work the app loads a separate in memory
+# db so the data loaded during the class initialization is not
+# accessible to the flask app :(
+def _add_server_data(data):
+    server_data = data["server_data"]
+    switch_info = data["switch_info"]
+    server_data_plugin.create_entry(server_data)
+    for switch in switch_info:
+        server_data_plugin.add_switch_entry(switch)
 
 
 @app.route("/pxe")
@@ -93,17 +127,76 @@ def get_hardware_specs():
     return r
 
 
+@app.route("/versions")
+@app.route("/versions/json")
+def get_software_versions_json():
+    """
+    Returns the most recent versions and locations of the software projects
+    needed to make the Servers run.
 
-#@app.route("/versions")
-#@app.route("/versions/json")
-#@app.route("/versions/ipxe")
-#@app.route("/versions/ipxe/<project>")
+    Specifics on how this data is gathered are handled by the plugin configured
+    in your config.
 
-#@app.route("/update", methods=["PUT"])
-#@app.route("/update/status", methods=["PUT"])
-#@app.route("/update/os")
-#@app.route("/update/opstatus")
+    :return:
+    """
+    return jsonify(version_data_plugin.get_latest_versions())
 
+
+@app.route("/versions/ipxe")
+@app.route("/versions/ipxe/<project>")
+def get_software_versions_ipxe(project=None):
+    """
+    This method is almost identical to get_software_versions_json() except that
+    it returns variables in iPXE script format.
+    """
+    # For backwards compatibility on requests that don't specify a project name
+    r = make_response(version_data_plugin.get_latest_ipxe(project))
+    r.mimetype = "text/plain"
+    return r
+
+
+@app.route("/update")
+@app.route("/update/status")
+def set_boot_status():
+    # Get the server number and status from request
+    server_number = request.args.get('server_number')
+    boot_status = request.args.get('boot_status')
+
+    if server_number is None or boot_status is None:
+        abort(412)
+
+    response = server_data_plugin.set_boot_status(server_number, boot_status)
+    return jsonify(response)
+
+
+@app.route("/update/os")
+def set_boot_os():
+    # Get the server number and status from request
+    server_number = request.args.get('server_number')
+    boot_os = request.args.get('boot_os')
+
+    if server_number is None or boot_os is None:
+        abort(412)
+
+    return jsonify(
+        server_data_plugin.set_boot_os(server_number, boot_os)
+    )
+
+
+@app.route("/update/opstatus")
+def set_operational_status():
+    """
+    Get the server number and status from request
+    """
+    logging.info("Set Operational Status: {}".format(dict(request.args)))
+    server_number = request.args.get('server_number')
+    operational_status = request.args.get('opstatus')
+
+    if server_number is None or operational_status is None:
+        abort(412)
+    return jsonify(
+        server_data_plugin.set_operational_status(server_number, operational_status)
+    )
 
 
 if __name__ == '__main__':

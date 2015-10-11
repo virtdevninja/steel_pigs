@@ -12,6 +12,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import json
 import os
 import unittest
 
@@ -25,6 +26,10 @@ import steel_pigs
 
 class TestFlaskApp(PigTests):
 
+    @classmethod
+    def setUpClass(cls):
+        steel_pigs._add_server_data(cls._create_entry_data())
+
     def setUp(self):
         steel_pigs.app.config['TESTING'] = True
         self.app = steel_pigs.app.test_client()
@@ -37,6 +42,45 @@ class TestFlaskApp(PigTests):
         rv = self.app.get("/hardware?manufacturer=Dell%20&product=r%20810")
         self.assertIn("r810", rv.data)
 
+    def test_versions_json(self):
+        rv = self.app.get("/versions")
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(rv.content_type, "application/json")
+
+    def test_set_operational_status_fails_when_missing_required_args(self):
+        rv = self.app.get("/update/opstatus")
+        self.assertEqual(rv.status_code, 412)
+
+    def test_set_operational_status_works_as_expected(self):
+        rv = self.app.get("/update/opstatus?server_number=555121&opstatus=kicking")
+        self.assertEqual(rv.content_type, "application/json")
+        data = json.loads(rv.data)
+        self.assertEqual(data["operation"], "success")
+
+    def test_set_boot_os_fails_with_missing_props(self):
+        rv = self.app.get("/update/os")
+        self.assertEqual(rv.status_code, 412)
+
+    def test_set_boot_os_success_with_valid_params(self):
+        rv = self.app.get("/update/os?boot_os=Fedora&server_number=555121")
+        self.assertEqual(rv.content_type, "application/json")
+        data = json.loads(rv.data)
+        self.assertEqual(data["operation"], "success")
+
+    def test_update_boot_status_fails_with_missing_params(self):
+        rv = self.app.get("/update/status")
+        self.assertEqual(rv.status_code, 412)
+
+    def test_update_boot_status_success_with_valid_params(self):
+        rv = self.app.get("/update/status?server_number=555121&boot_status=provision")
+        self.assertEqual(rv.content_type, "application/json")
+        data = json.loads(rv.data)
+        self.assertEqual(data["operation"], "success")
+
+    def test_get_versions_ipxe(self):
+        rv = self.app.get("/versions/ipxe")
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn("set latest_version 4", rv.data)
 
 if __name__ == '__main__':
     unittest.main()

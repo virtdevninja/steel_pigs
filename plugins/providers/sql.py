@@ -12,6 +12,8 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import logging
+
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -21,6 +23,7 @@ from sqlalchemy.orm import relationship
 Base = declarative_base()
 
 from .pluginbase import ProviderPluginBase
+
 
 class ServerDataModel(Base):
     __tablename__ = 'ServerData'
@@ -46,6 +49,7 @@ class ServerDataModel(Base):
     operational_status = Column(String(255), nullable=False)
     switches = relationship("SwitchInfo", backref="ServerData")
 
+
 class SwitchInfo(Base):
     __tablename__ = "SwitchInfo"
     id = Column(Integer, primary_key=True)
@@ -54,7 +58,7 @@ class SwitchInfo(Base):
     server_number = Column(Integer, ForeignKey("ServerData.server_number"))
 
 
-class SQL(object):
+class SQL(ProviderPluginBase):
     _engine = None
 
     def __init__(self, config):
@@ -157,6 +161,9 @@ class SQL(object):
         :param status:
         :return: Python dict that will be jsonified by flask and returned to user
         """
+        logging.info("Setting boot status to {} for {}".format(
+            status, server_number
+        ))
         session_maker = sessionmaker(bind=self.engine)
         session = session_maker()
         server = session.query(ServerDataModel).filter_by(
@@ -167,8 +174,11 @@ class SQL(object):
             session.commit()
             session.close()
             return {"operation": "success", "status_set": status}
+        logging.info("Unable to locate {} to set its boot status.".format(
+            server_number
+        ))
         session.close()
-        return
+        return {"operation": "failure", "status_set": "unable to locate device"}
 
     def set_boot_os(self, server_number, os):
         """
@@ -178,18 +188,26 @@ class SQL(object):
         :param os:
         :return: Python dict that will be jsonified by flask and returned to user
         """
+        logging.info("Setting boot os on {} to {}".format(
+            server_number, os
+        ))
         session_maker = sessionmaker(bind=self.engine)
         session = session_maker()
         server = session.query(ServerDataModel).filter_by(
             server_number=server_number
         ).first()
         if server:
+            logging.info("Found server {}. Setting os to {}".format(
+                server_number, os
+            ))
             server.boot_os = os
             session.commit()
             session.close()
+            logging.info("Updated boot os.")
             return {"operation": "success", "os_set": os}
+        logging.info("Unable to locate {} to update boot os".format(server_number))
         session.close()
-        return
+        return {"operation": "failure", "set_boot_os": "unable to locate device"}
 
     def set_operational_status(self, server_number, status):
         """
@@ -199,18 +217,23 @@ class SQL(object):
         :param status:
         :return: Python dict that will be jsonified by flask and returned to user
         """
+        logging.info("Setting Op status on {} to {}".format(
+            server_number, status
+        ))
         session_maker = sessionmaker(bind=self.engine)
         session = session_maker()
         server = session.query(ServerDataModel).filter_by(
             server_number=server_number
         ).first()
         if server:
+            logging.info("Found server {}".format(server_number))
             server.operational_status = status
             session.commit()
             session.close()
             return {"operation": "success", "status_set": status}
         session.close()
-        return
+        logging.info("Unable to locate server {}".format(server_number))
+        return {"operation": "failure", "status_set": "unable to locate device"}
 
     def create_entry(self, server_info):
         """
@@ -239,4 +262,3 @@ class SQL(object):
         session.commit()
         session.close()
 
-ProviderPluginBase.register(SQL)

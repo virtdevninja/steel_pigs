@@ -20,7 +20,9 @@ from plugins.providers.sql import SQL
 
 config = {'engine': "sqlite:///:memory:"}
 
+
 class PigTests(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         cls.sql = SQL(config)
@@ -31,6 +33,16 @@ class PigTests(unittest.TestCase):
 
     @classmethod
     def _add_entry(cls):
+        data = cls._create_entry_data()
+        server_data = data["server_data"]
+        switch_info = data["switch_info"]
+        cls.sql.create_entry(server_data)
+        for switch in switch_info:
+            cls.sql.add_switch_entry(switch)
+
+    @classmethod
+    def _create_entry_data(cls):
+        data = {}
         server_entry = ServerDataModel()
         server_entry.boot_os = "Ubuntu"
         server_entry.boot_os_version = "14.04.2"
@@ -46,19 +58,17 @@ class PigTests(unittest.TestCase):
         server_entry.primary_mac = "00:11:22:33:44:55"
         server_entry.primary_nm = "255.255.255.0"
         server_entry.server_number = 555121
-        cls.sql.create_entry(server_entry)
-
+        data["server_data"] = server_entry
         switch_entry = SwitchInfo()
         switch_entry.server_number = 555121
         switch_entry.switch_name = "Switch 01"
         switch_entry.switch_port = "1"
-        cls.sql.add_switch_entry(switch_entry)
-
         switch_entry1 = SwitchInfo()
         switch_entry1.server_number = 555121
         switch_entry1.switch_name = "Switch 01"
         switch_entry1.switch_port = "2"
-        cls.sql.add_switch_entry(switch_entry1)
+        data["switch_info"] = [switch_entry, switch_entry1]
+        return data
 
     def setUp(self):
         logging.basicConfig()
