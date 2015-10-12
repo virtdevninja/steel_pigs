@@ -23,11 +23,6 @@ from pigs_app_settings.frontend import frontend
 
 import pigs_config
 
-#logging.basicConfig(
-#    format='%(asctime)s %(message)s',
-#    level="{}".format(pigs_config.LOGLEVEL)
-#)
-
 app = Flask(__name__)
 Bootstrap(app)
 app.register_blueprint(frontend)
@@ -68,6 +63,38 @@ except TypeError as te:
     print te.message
     raise SystemExit
 
+formatter_provider_plugin = __import__(
+    pigs_config.FORMATTER_PROVIDER_PLUGIN["namespace"],
+    fromlist=pigs_config.FORMATTER_PROVIDER_PLUGIN["class"]
+)
+del klass
+klass = getattr(
+    formatter_provider_plugin,
+    pigs_config.FORMATTER_PROVIDER_PLUGIN["class"]
+)
+
+try:
+    formatter_plugin = klass(pigs_config.FORMATTER_PROVIDER_PLUGIN)
+except TypeError as te:
+    print te.message
+    raise SystemExit
+
+pxe_provider_plugin = __import__(
+    pigs_config.PXE_PROVIDER_PLUGIN["namespace"],
+    fromlist=pigs_config.PXE_PROVIDER_PLUGIN["class"]
+)
+del klass
+klass = getattr(
+    pxe_provider_plugin,
+    pigs_config.PXE_PROVIDER_PLUGIN["class"]
+)
+
+try:
+    pxe_plugin = klass(pigs_config.PXE_PROVIDER_PLUGIN)
+except TypeError as te:
+    print te.message
+    raise SystemExit
+
 
 # yucky but I couldnt think of a better way to solve this.
 # for unit testing to work the app loads a separate in memory
@@ -91,7 +118,36 @@ def get_pxe_script(config_file=None):
     :param config_file:
     :return:
     """
-    pass
+    logging.info("Request to /pxe with params: %s" % dict(request.args))
+
+    # Did we get a server number or a switch name/port combo?
+    # NOTE(major): This is really ugly but Ant begged me to do it and said I
+    #              would be forgiven at a later date.
+    if 'number' in request.args:
+        server_number = request.args.get('number')
+        server_data = server_data_provider_plugin.get_server_by_number(server_number)
+    elif 'server_number' in request.args:
+        server_number = request.args.get("server_number")
+        server_data = server_data_provider_plugin.get_server_by_number(server_number)
+    elif 'mac' in request.args:
+        mac = request.args.get('mac')
+        mac_address = formatter_plugin.format_mac(mac)
+        server_data = server_data_plugin.get_server_by_mac(mac_address)
+    else:
+        # Get the switch data and strip it
+        switch_name = request.args.get('switch_name')
+        switch_port = request.args.get('switch_port')
+        if switch_name is None or switch_port is None:
+            abort(412)
+        switch_name_stripped = formatter_plugin.format_switch(switch_name)
+        switch_port_stripped = formatter_plugin.format_port(switch_port)
+        # Get the server_data for this switch name/port combo
+        server_data = server_data_provider_plugin.get_server_by_switch(
+            switch_name_stripped, switch_port_stripped
+        )
+    # logic for your response including mime type, or headers should all
+    # happen in your pxe plugin.
+    return pxe_plugin.generate_ipxe_script(server_data=server_data, request=request)
 
 
 @app.route("/hardware")
@@ -139,6 +195,7 @@ def get_software_versions_json():
 
     :return:
     """
+    logging.info("Returning version data.")
     return jsonify(version_data_plugin.get_latest_versions())
 
 
@@ -150,6 +207,7 @@ def get_software_versions_ipxe(project=None):
     it returns variables in iPXE script format.
     """
     # For backwards compatibility on requests that don't specify a project name
+    logging.info("Fetching iPXE version script.")
     r = make_response(version_data_plugin.get_latest_ipxe(project))
     r.mimetype = "text/plain"
     return r
@@ -158,7 +216,9 @@ def get_software_versions_ipxe(project=None):
 @app.route("/update")
 @app.route("/update/status")
 def set_boot_status():
-    # Get the server number and status from request
+    """
+    Get the server number and status from request
+    """
     server_number = request.args.get('server_number')
     boot_status = request.args.get('boot_status')
 
@@ -171,7 +231,9 @@ def set_boot_status():
 
 @app.route("/update/os")
 def set_boot_os():
-    # Get the server number and status from request
+    """
+    Get the server number and status from request
+    """
     server_number = request.args.get('server_number')
     boot_os = request.args.get('boot_os')
 

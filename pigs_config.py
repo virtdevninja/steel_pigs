@@ -25,5 +25,15 @@ VERSION_PROVIDER_PLUGIN = {
     "class": "StaticVersionProvider"
 }
 
+PXE_PROVIDER_PLUGIN = {
+    "namespace": "plugins.providers.static_pxe_provider",
+    "class": "StaticPXEProvider"
+}
+
+FORMATTER_PROVIDER_PLUGIN = {
+    "namespace": "plugins.providers.noformat",
+    "class": "NoFormatProvider"
+}
+
 # the app key for the flask app. This can be anything, and should be random and private
 SECRET_KEY = "Some random string here for use with the flask_wtf forms."
