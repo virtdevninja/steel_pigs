@@ -17,7 +17,22 @@
 PROVIDER_PLUGIN = {
     "namespace": "plugins.providers.sql",
     "class": "SQL",
-    "engine": "sqlite:///",
+    "engine": "sqlite:///:memory:",
+}
+
+VERSION_PROVIDER_PLUGIN = {
+    "namespace": "plugins.providers.static_version",
+    "class": "StaticVersionProvider"
+}
+
+PXE_PROVIDER_PLUGIN = {
+    "namespace": "plugins.providers.static_pxe_provider",
+    "class": "StaticPXEProvider"
+}
+
+FORMATTER_PROVIDER_PLUGIN = {
+    "namespace": "plugins.providers.noformat",
+    "class": "NoFormatProvider"
 }
 
 # the app key for the flask app. This can be anything, and should be random and private
