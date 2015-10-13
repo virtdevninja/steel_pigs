@@ -4,8 +4,8 @@ Jinja2==2.8
 MarkupSafe==0.23
 Werkzeug==0.10.4
 wheel==0.24.0
-flask-bootstrap
-flask_nav
-flask_wtf
-sqlalchemy
+flask-bootstrap==3.3.5.6
+flask_nav==0.4
+flask_wtf==0.12
+sqlalchemy==1.0.8
 
