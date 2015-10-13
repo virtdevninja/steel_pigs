@@ -18,12 +18,12 @@ from flask import Flask, render_template, make_response, request, abort
 from flask import jsonify
 from flask_bootstrap import Bootstrap
 
+from steel_pigs import app
 from pigs_app_settings.nav import nav
 from pigs_app_settings.frontend import frontend
 
 import pigs_config
 
-app = Flask(__name__)
 Bootstrap(app)
 app.register_blueprint(frontend)
 app.secret_key = pigs_config.SECRET_KEY

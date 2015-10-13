@@ -21,18 +21,18 @@ from steel_pigs.tests import PigTests
 parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.sys.path.insert(0, parentdir)
 
-import steel_pigs
+import steel_pigs.webapp
 
 
 class TestFlaskApp(PigTests):
 
     @classmethod
     def setUpClass(cls):
-        steel_pigs._add_server_data(cls._create_entry_data())
+        steel_pigs.webapp._add_server_data(cls._create_entry_data())
 
     def setUp(self):
-        steel_pigs.app.config['TESTING'] = True
-        self.app = steel_pigs.app.test_client()
+        steel_pigs.webapp.app.config['TESTING'] = True
+        self.app = steel_pigs.webapp.app.test_client()
 
     def test_hardware_fails_with_412_when_missing_prop(self):
         rv = self.app.get("/hardware")
