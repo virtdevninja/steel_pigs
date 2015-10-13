@@ -30,7 +30,7 @@ with open('test-requirements.txt') as f:
 setup(
     name='steel_pigs',
     version='0.1',
-    packages=find_packages(exclude=["test*"]),
+    packages=find_packages(exclude=["tests", "*.tests", "tests.*", "*.tests.*"]),
     url='https://github.com/virtdevninja/steel_pigs',
     license='License :: OSI Approved :: Apache Software License',
     author='Michael Rice',
@@ -39,12 +39,12 @@ setup(
     long_description=read('README.rst'),
     platforms=['Windows', 'Linux', 'Solaris', 'Mac OS-X', 'Unix'],
     test_suite='tests',
-    zip_safe=True,
     tests_require=required_for_tests,
     package_data={
         'static': 'steel_pigs/static/*',
         'templates': 'steel_pigs/templates/*'
     },
+    zip_safe=False,
     include_package_data=True,
     entry_points={
         'console_scripts': [
