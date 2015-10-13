@@ -16,7 +16,7 @@ import json
 import os
 import unittest
 
-from tests import PigTests
+from steel_pigs.tests import PigTests
 
 parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.sys.path.insert(0, parentdir)

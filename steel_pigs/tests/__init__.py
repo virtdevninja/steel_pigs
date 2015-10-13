@@ -15,8 +15,8 @@
 import logging
 import unittest
 
-from plugins.providers.sql import ServerDataModel, SwitchInfo
-from plugins.providers.sql import SQL
+from providers.sql import ServerDataModel, SwitchInfo
+from providers.sql import SQL
 
 config = {'engine': "sqlite:///:memory:"}
 

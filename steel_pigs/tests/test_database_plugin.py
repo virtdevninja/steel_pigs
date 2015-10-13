@@ -16,7 +16,7 @@ import unittest
 
 from sqlalchemy.exc import IntegrityError
 
-from tests import PigTests
+from steel_pigs.tests import PigTests
 
 class TestSQL(PigTests):
 
