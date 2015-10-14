@@ -1,0 +1,28 @@
+{%- extends "bootstrap/base.html" %}
+
+{% block title %}Steel PIGS -- Powerful iPXE Generation Service{% endblock %}
+
+{# enable fixes for legacy browsers. First we need to import the necessary macros: #}
+{% import "bootstrap/fixes.html" as fixes %}
+
+{# Inside head block we apply them. To not replace the header,
+``super()`` is used: #}
+{% block head %}
+{{super()}}
+{{fixes.ie8()}}
+{%- endblock %}
+
+{% import "bootstrap/utils.html" as utils %}
+
+{# Adding custom CSS files is also done here. Check documentation at
+http://pythonhosted.org/Flask-Bootstrap/basic-usage.html#available-blocks
+for overview. #}
+{% block styles -%}
+{# do not forget to call super or Bootstrap's own stylesheets will disappear! #}
+{{super()}}
+{% endblock %}
+
+{# Finally, round things out with navigation #}
+{% block navbar %}
+{{nav.frontend_top.render()}}
+{% endblock %}
