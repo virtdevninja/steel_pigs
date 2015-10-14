@@ -15,23 +15,23 @@
 # this should be in the form of:
 # from plugins.providers.sql import SQL
 PROVIDER_PLUGIN = {
-    "namespace": "plugins.providers.sql",
+    "namespace": "steel_pigs.plugins.providers.sql",
     "class": "SQL",
     "engine": "sqlite:///:memory:",
 }
 
 VERSION_PROVIDER_PLUGIN = {
-    "namespace": "plugins.providers.static_version",
+    "namespace": "steel_pigs.plugins.providers.static_version",
     "class": "StaticVersionProvider"
 }
 
 PXE_PROVIDER_PLUGIN = {
-    "namespace": "plugins.providers.static_pxe_provider",
+    "namespace": "steel_pigs.plugins.providers.static_pxe_provider",
     "class": "StaticPXEProvider"
 }
 
 FORMATTER_PROVIDER_PLUGIN = {
-    "namespace": "plugins.providers.noformat",
+    "namespace": "steel_pigs.plugins.providers.noformat",
     "class": "NoFormatProvider"
 }
 

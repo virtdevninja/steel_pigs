@@ -1,0 +1,3 @@
+recursive-include steel_pigs/templates *
+recursive-include steel_pigs/static *
+recursive-exclude steel_pigs/tests *

@@ -15,8 +15,8 @@
 import logging
 import unittest
 
-from plugins.providers.sql import ServerDataModel, SwitchInfo
-from plugins.providers.sql import SQL
+from steel_pigs.plugins.providers.sql import ServerDataModel, SwitchInfo
+from steel_pigs.plugins.providers.sql import SQL
 
 config = {'engine': "sqlite:///:memory:"}
 
