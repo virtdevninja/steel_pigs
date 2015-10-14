@@ -46,10 +46,5 @@ setup(
     },
     zip_safe=False,
     include_package_data=True,
-    entry_points={
-        'console_scripts': [
-            'pigs_dev_server = steel_pigs.scripts.run_server:dev_server',
-            'pigs_run_server = steel_pigs.scripts.run_server:run_server'
-        ]
-    },
+    setup_requires=[required_for_tests]
 )
