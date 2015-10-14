@@ -11,9 +11,3 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
-# pylint: disable=C
-
-from flask import Flask
-
-app = Flask(__name__, static_folder='static', static_url_path='',
-            template_folder='templates')
