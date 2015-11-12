@@ -126,10 +126,10 @@ def get_pxe_script(config_file=None):
     #              would be forgiven at a later date.
     if 'number' in request.args:
         server_number = request.args.get('number')
-        server_data = server_data_provider_plugin.get_server_by_number(server_number)
+        server_data = server_data_plugin.get_server_by_number(server_number)
     elif 'server_number' in request.args:
         server_number = request.args.get("server_number")
-        server_data = server_data_provider_plugin.get_server_by_number(server_number)
+        server_data = server_data_plugin.get_server_by_number(server_number)
     elif 'mac' in request.args:
         mac = request.args.get('mac')
         mac_address = formatter_plugin.format_mac(mac)
@@ -143,7 +143,7 @@ def get_pxe_script(config_file=None):
         switch_name_stripped = formatter_plugin.format_switch(switch_name)
         switch_port_stripped = formatter_plugin.format_port(switch_port)
         # Get the server_data for this switch name/port combo
-        server_data = server_data_provider_plugin.get_server_by_switch(
+        server_data = server_data_plugin.get_server_by_switch(
             switch_name_stripped, switch_port_stripped
         )
     # logic for your response including mime type, or headers should all
