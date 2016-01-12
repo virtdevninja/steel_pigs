@@ -15,7 +15,7 @@
 import logging
 import unittest
 
-from steel_pigs.plugins.providers.sql import ServerDataModel, SwitchInfo
+from steel_pigs.plugins.providers.sql import ServerDataModel, SwitchInfo, ProvisionZone
 from steel_pigs.plugins.providers.sql import SQL
 
 config = {'engine': "sqlite:///:memory:"}
@@ -43,6 +43,10 @@ class PigTests(unittest.TestCase):
     @classmethod
     def _create_entry_data(cls):
         data = {}
+        p_zone = ProvisionZone()
+        p_zone.provision_img_host = "10.12.1.10"
+        p_zone.provision_mirror_host = "10.12.1.10"
+        p_zone.zone_name = "DFW1"
         server_entry = ServerDataModel()
         server_entry.boot_os = "Ubuntu"
         server_entry.boot_os_version = "14.04.2"
@@ -58,6 +62,8 @@ class PigTests(unittest.TestCase):
         server_entry.primary_mac = "00:11:22:33:44:55"
         server_entry.primary_nm = "255.255.255.0"
         server_entry.server_number = 555121
+        server_entry.ntp_server = "10.12.1.10"
+        server_entry.provision_zone = p_zone
         data["server_data"] = server_entry
         switch_entry = SwitchInfo()
         switch_entry.server_number = 555121

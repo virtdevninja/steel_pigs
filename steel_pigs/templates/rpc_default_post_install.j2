@@ -1,0 +1,14 @@
+#############
+#
+# Post Install
+#
+#############
+
+# Command Line 1: Allow root to SSH.
+d-i preseed/late_command string \
+sed -i '/PermitRootLogin / s/ .*/ yes/' /target/etc/ssh/sshd_config; \
+cd /target; \
+wget -O {{ server['server_number'] }}.sh http://{{ server['provision_img_host'] }}/miniplop/post_install?server={{ server['server_number'] }}; \
+chmod +x ./{{ server['server_number'] }}.sh; \
+chroot ./ ./{{ server['server_number'] }}.sh; \
+rm -f ./{{ server['server_number'] }}.sh

@@ -32,6 +32,7 @@ class TestSQL(PigTests):
     def test_find_by_number(self):
         number = 555121
         entry = self.sql.get_server_by_number(number)
+        print entry
         self.assertEqual(number, entry["server_number"])
 
     def test_find_by_number_works_using_string(self):
@@ -72,6 +73,11 @@ class TestSQL(PigTests):
         switch_port = "1"
         entry = self.sql.get_server_by_switch(switch_name, switch_port)
         self.assertEqual(555121, entry["server_number"])
+
+    def test_provision_zone_is_dfw(self):
+        number = 555121
+        s = self.sql.get_server_by_number(number)
+        self.assertEqual(s["provision_zone"]["zone_name"], "DFW1")
 
 if __name__ == '__main__':
     unittest.main()
