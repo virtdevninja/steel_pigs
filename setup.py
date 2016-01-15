@@ -29,7 +29,7 @@ with open('test-requirements.txt') as f:
 
 setup(
     name='steel_pigs',
-    version='0.3',
+    version='0.4',
     packages=find_packages(exclude=["tests", "*.tests", "tests.*", "*.tests.*"]),
     url='https://github.com/virtdevninja/steel_pigs',
     license='License :: OSI Approved :: Apache Software License',
