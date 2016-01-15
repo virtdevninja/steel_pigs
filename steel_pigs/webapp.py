@@ -96,6 +96,22 @@ except TypeError as te:
     print te.message
     raise SystemExit
 
+provision_provider_plugin = __import__(
+    pigs_config.PROVISION_PROVIDER_PLUGIN["namespace"],
+    fromlist=pigs_config.PROVISION_PROVIDER_PLUGIN["class"]
+)
+del klass
+klass = getattr(
+    provision_provider_plugin,
+    pigs_config.PROVISION_PROVIDER_PLUGIN["class"]
+)
+
+try:
+    provision_plugin = klass(pigs_config.PROVISION_PROVIDER_PLUGIN)
+except TypeError as te:
+    print te.message
+    raise SystemExit
+
 
 # yucky but I couldnt think of a better way to solve this.
 # for unit testing to work the app loads a separate in memory
@@ -260,6 +276,30 @@ def set_operational_status():
     return jsonify(
         server_data_plugin.set_operational_status(server_number, operational_status)
     )
+
+
+@app.route("/provision/os/start")
+def begin_os_provisioning():
+    """
+    Get a provision script for a given device.
+    This could be a kickstart file, or a preseed file
+    just depends on the device and how you configure
+    the plugin that provides this info.
+
+    :return:
+    """
+    logging.info("Fetching provision start. Device: ".format(dict(request.args)))
+    server_mac = request.args.get("mac")
+    if server_mac is None:
+        abort(412, description="Missing required param: mac")
+    server = server_data_plugin.get_server_by_mac(mac=server_mac)
+    if server is None:
+        abort(404, description="Server not found using {}".format(server_mac))
+    if str(server["operational_status"]).lower() == pigs_config.ONLINE_COMPLETE_STATUS.lower():
+        return
+    elif str(server["operational_status"]).lower() != pigs_config.PROVISION_STATUS.lower():
+        return
+    return provision_plugin.get_provision_script(server)
 
 
 if __name__ == '__main__':
