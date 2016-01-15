@@ -13,16 +13,15 @@
 #   limitations under the License.
 
 import logging
-
+from contextlib import contextmanager
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
+from .pluginbase import ProviderPluginBase
 
 Base = declarative_base()
-
-from .pluginbase import ProviderPluginBase
 
 
 class ServerDataModel(Base):
@@ -47,7 +46,18 @@ class ServerDataModel(Base):
     boot_profile = Column(String(128), nullable=False)
     boot_status = Column(String(128), nullable=False)
     operational_status = Column(String(255), nullable=False)
+    ntp_server = Column(String(128), nullable=False)
     switches = relationship("SwitchInfo", backref="ServerData")
+    provision_zone_id = Column(Integer, ForeignKey('ProvisionZone.id'))
+    provision_zone = relationship("ProvisionZone")
+
+
+class ProvisionZone(Base):
+    __tablename__ = "ProvisionZone"
+    id = Column(Integer, primary_key=True)
+    zone_name = Column(String(128), unique=True, nullable=False)
+    provision_img_host = Column(String(128), nullable=False)
+    provision_mirror_host = Column(String(128), nullable=False)
 
 
 class SwitchInfo(Base):
@@ -77,10 +87,48 @@ class SQL(ProviderPluginBase):
         """
         self._engine = config['engine']
         self.engine = create_engine(self._engine, echo=False)
+        self.sessionmaker = None
         Base.metadata.create_all(self.engine)
+
+    @contextmanager
+    def _session_scope(self):
+        """Return a session context to wrap around db operations.
+        example:
+        with db.session_scope() as session:
+            # do some inserts
+        :returns: Session context
+        """
+        session = self._get_session()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def _get_session(self):
+        """
+
+        :return: sessionmaker
+        """
+        if not self.engine:
+            raise Exception('Engine not created yet.')
+
+        # Check for session maker
+        if not self.sessionmaker:
+            self.sessionmaker = sessionmaker(bind=self.engine)
+
+        # Call session maker for session
+        return self.sessionmaker(bind=self.engine)
 
     @staticmethod
     def _query_to_dict(data):
+        if isinstance(data, ProvisionZone):
+            dictret = dict(data.__dict__)
+            dictret.pop('_sa_instance_state', None)
+            return dictret
         if len(data) != 1:
             return
         dictret = dict(data[0].__dict__)
@@ -92,14 +140,13 @@ class SQL(ProviderPluginBase):
         Retrieve data about a server by name and return an object that
         represents it.
         """
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        query = session.query(ServerDataModel).filter(
-            ServerDataModel.hostname == name
-        ).limit(1)
-        results = query.all()
-        session.close()
-        return self._query_to_dict(results)
+        with self._session_scope() as session:
+            query = session.query(ServerDataModel).filter(
+                ServerDataModel.hostname == name
+            ).limit(1)
+            results = query.all()
+            results = self._query_to_dict(results)
+        return results
 
     def get_server_by_number(self, number):
         """
@@ -109,14 +156,16 @@ class SQL(ProviderPluginBase):
         :param number: The device number or asset number of a given server
         :return: returns a dict that represents a server
         """
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        query = session.query(ServerDataModel).filter(
-            ServerDataModel.server_number == number
-        ).limit(1)
-        results = query.all()
-        session.close()
-        return self._query_to_dict(results)
+        with self._session_scope() as session:
+            query = session.query(ServerDataModel).filter(
+                ServerDataModel.server_number == number
+            ).limit(1)
+            results = query.all()
+            ret = self._query_to_dict(results)
+            prov = results[0].provision_zone
+            prov_d = self._query_to_dict(prov)
+            ret["provision_zone"] = prov_d
+        return ret
 
     def get_server_by_mac(self, mac):
         """
@@ -125,14 +174,13 @@ class SQL(ProviderPluginBase):
         :param mac: String representing the mac address of a given server
         :return: returns a dict that represents a server
         """
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        query = session.query(ServerDataModel).filter(
-            ServerDataModel.primary_mac == mac
-        ).limit(1)
-        results = query.all()
-        session.close()
-        return self._query_to_dict(results)
+        with self._session_scope() as session:
+            query = session.query(ServerDataModel).filter(
+                ServerDataModel.primary_mac == mac
+            ).limit(1)
+            results = query.all()
+            results = self._query_to_dict(results)
+        return results
 
     def get_server_by_switch(self, switch_name, switch_port):
         """
@@ -142,15 +190,12 @@ class SQL(ProviderPluginBase):
         :param switch_port:
         :return:
         """
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        query = session.query(SwitchInfo).filter(
-            SwitchInfo.switch_name == switch_name and SwitchInfo.switch_port == switch_port
-        ).limit(1)
-        result = query.all()
-        retdict = result[0].ServerData.__dict__
-        retdict.pop('_sa_instance_state', None)
-        session.close()
+        with self._session_scope() as session:
+            query = session.query(SwitchInfo).filter(
+                SwitchInfo.switch_name == switch_name and SwitchInfo.switch_port == switch_port
+            ).limit(1)
+            result = query.all()
+            retdict = self._query_to_dict(result)
         return retdict
 
     def set_boot_status(self, server_number, status):
@@ -164,21 +209,18 @@ class SQL(ProviderPluginBase):
         logging.info("Setting boot status to {} for {}".format(
             status, server_number
         ))
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        server = session.query(ServerDataModel).filter_by(
-            server_number=server_number
-        ).first()
-        if server:
-            server.boot_status = status
-            session.commit()
-            session.close()
-            return {"operation": "success", "status_set": status}
-        logging.info("Unable to locate {} to set its boot status.".format(
-            server_number
-        ))
-        session.close()
-        return {"operation": "failure", "status_set": "unable to locate device"}
+        with self._session_scope() as session:
+            server = session.query(ServerDataModel).filter_by(
+                server_number=server_number
+            ).first()
+            if server:
+                server.boot_status = status
+                session.commit()
+                return {"operation": "success", "status_set": status}
+            logging.info("Unable to locate {} to set its boot status.".format(
+                server_number
+            ))
+            return {"operation": "failure", "status_set": "unable to locate device"}
 
     def set_boot_os(self, server_number, os):
         """
@@ -191,23 +233,20 @@ class SQL(ProviderPluginBase):
         logging.info("Setting boot os on {} to {}".format(
             server_number, os
         ))
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        server = session.query(ServerDataModel).filter_by(
-            server_number=server_number
-        ).first()
-        if server:
-            logging.info("Found server {}. Setting os to {}".format(
-                server_number, os
-            ))
-            server.boot_os = os
-            session.commit()
-            session.close()
-            logging.info("Updated boot os.")
-            return {"operation": "success", "os_set": os}
-        logging.info("Unable to locate {} to update boot os".format(server_number))
-        session.close()
-        return {"operation": "failure", "set_boot_os": "unable to locate device"}
+        with self._session_scope() as session:
+            server = session.query(ServerDataModel).filter_by(
+                server_number=server_number
+            ).first()
+            if server:
+                logging.info("Found server {}. Setting os to {}".format(
+                    server_number, os
+                ))
+                server.boot_os = os
+                session.commit()
+                logging.info("Updated boot os.")
+                return {"operation": "success", "os_set": os}
+            logging.info("Unable to locate {} to update boot os".format(server_number))
+            return {"operation": "failure", "set_boot_os": "unable to locate device"}
 
     def set_operational_status(self, server_number, status):
         """
@@ -220,20 +259,17 @@ class SQL(ProviderPluginBase):
         logging.info("Setting Op status on {} to {}".format(
             server_number, status
         ))
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        server = session.query(ServerDataModel).filter_by(
-            server_number=server_number
-        ).first()
-        if server:
-            logging.info("Found server {}".format(server_number))
-            server.operational_status = status
-            session.commit()
-            session.close()
-            return {"operation": "success", "status_set": status}
-        session.close()
-        logging.info("Unable to locate server {}".format(server_number))
-        return {"operation": "failure", "status_set": "unable to locate device"}
+        with self._session_scope() as session:
+            server = session.query(ServerDataModel).filter_by(
+                server_number=server_number
+            ).first()
+            if server:
+                logging.info("Found server {}".format(server_number))
+                server.operational_status = status
+                session.commit()
+                return {"operation": "success", "status_set": status}
+            logging.info("Unable to locate server {}".format(server_number))
+            return {"operation": "failure", "status_set": "unable to locate device"}
 
     def create_entry(self, server_info):
         """
@@ -243,11 +279,9 @@ class SQL(ProviderPluginBase):
         :param server_info: ServerDataModel object
         :return: None
         """
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        session.add(server_info)
-        session.commit()
-        session.close()
+        with self._session_scope() as session:
+            session.add(server_info)
+            session.commit()
 
     def add_switch_entry(self, switch_info):
         """
@@ -256,9 +290,6 @@ class SQL(ProviderPluginBase):
         :param switch_info:
         :return:
         """
-        session_maker = sessionmaker(bind=self.engine)
-        session = session_maker()
-        session.add(switch_info)
-        session.commit()
-        session.close()
-
+        with self._session_scope() as session:
+            session.add(switch_info)
+            session.commit()

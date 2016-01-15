@@ -19,32 +19,21 @@
 
 set srv_num {{server_data['number']}}
 
-{%- for key, value in server_data['primary_ip_info'].iteritems() %}
+set mgmt_ip {{server_data['primary_ip']}}
+set mgmt_gw {{server_data['primary_gw']}}
+set mgmt_nm {{server_data['primary_nm']}}
 
-set mgmt_{{key}} {{value}}
-{%- endfor %}
+set server_hostname {{server_data['hostname']}}
 
-{%- for key, value in server_data['drac'].iteritems() %}
-
-set drac_{{key}} {{value}}
-{%- endfor %}
-
-set server_hostname {{server_hostname}}
-
-set url http://boot.rpc.local
-set mirror http://boot.rpc.local
+set url http://192.168.100.3
+set mirror http://192.168.100.3
 
 set primary_dns {{server_data['primary_dns']}}
 set secondary_dns {{server_data['secondary_dns']}}
 set dns 8.8.8.8
 
-set name {{server_data['number']}}
+set name {{server_data['server_number']}}
 
-set cell {{server_data['cell']}}
-
-set region {{server_data['region']}}
-
-set datacenter {{server_data['data_center']}}
 
 set domain rpc.local
 
@@ -58,15 +47,12 @@ set steel_beard_boot_profile {{server_data['boot_profile']}}
 
 set steel_beard_boot_status {{server_data['boot_status']}}
 
-set steel_beard_enforce_firmware {{server_data['enforce_firmware']}}
-
 set steel_beard_operational_status {{server_data['operational_status']}}
 
 set core_name {{server_data['hostname']}}
 
 set core_status {{server_data['status']}}
 
-set hypervisor_type {{server_data['hypervisor_type']}}
 
 {% if request.args.get('debug') == 'yes' %}
 {{ server_data_dump }}

@@ -35,5 +35,13 @@ FORMATTER_PROVIDER_PLUGIN = {
     "class": "NoFormatProvider"
 }
 
+ONLINE_COMPLETE_STATUS = "online"
+PROVISION_STATUS = "provision"
+
+PROVISION_PROVIDER_PLUGIN = {
+    "namespace": "steel_pigs.plugins.providers.rpc_os_provision",
+    "class": "RPCProvision"
+}
+
 # the app key for the flask app. This can be anything, and should be random and private
 SECRET_KEY = "Some random string here for use with the flask_wtf forms."

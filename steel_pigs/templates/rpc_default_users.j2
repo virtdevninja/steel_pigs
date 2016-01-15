@@ -1,0 +1,21 @@
+#############
+#
+# Users and Password
+#
+#############
+
+# Skip creation of a root account (normal user account will be able to
+# use sudo). The default is false; preseed this to true if you want to set
+# a root password.
+d-i passwd/root-login boolean true
+
+# Alternatively, to skip creation of a normal user account.
+d-i passwd/make-user boolean false
+
+# The installer will warn about weak passwords. If you are sure you know
+# what you're doing and want to override it, uncomment this.
+d-i user-setup/allow-password-weak boolean true
+
+# Root password, either in clear text
+d-i passwd/root-password password cobbler
+d-i passwd/root-password-again password cobbler

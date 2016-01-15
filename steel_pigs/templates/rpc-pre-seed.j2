@@ -1,0 +1,127 @@
+#
+# Ubuntu Server 14.04 Preseed
+#
+# Usage:
+#
+# This Ubuntu Preseed file is meant to be used when installing Ubuntu
+# from the ISO. The following menus will require user input, everything
+# after will be an unattended install:
+#
+# * Select a language
+# * Select your location
+# * Configure the keyboard
+# * Configure the network
+#
+# References:
+#
+# https://help.ubuntu.com/14.04/installation-guide/example-preseed.txt
+# http://www.claudiokuenzler.com/blog/513/debian-ubuntu-preseed-create-two-volume-groups-same-disk
+
+#############
+#
+# Pre Install
+#
+#############
+
+# Command Line 1: This is necessary otherwise you will be prompted to umount /dev/sda. See Ubuntu bug #1347726.
+d-i preseed/early_command string \
+umount /media || true
+
+d-i live-installer/net-image string http://{{ server['provision_img_host'] }}/ubuntu/install/filesystem.squashfs
+#############
+#
+# Localization
+#
+#############
+
+d-i debian-installer/locale string en
+d-i debian-installer/country string US
+d-i debian-installer/locale string en_US.UTF-8
+d-i debian-installer/language string en
+
+#############
+#
+# Keyboard
+#
+#############
+
+# Disable automatic (interactive) keymap detection.
+d-i console-setup/ask_detect boolean false
+d-i console-setup/layoutcode string us
+d-i console-setup/variantcode string
+d-i keyboard-configuration/layoutcode string us
+
+{% include "rpc_default_network.j2" %}
+
+{% include "rpc_default_mirror.j2" %}
+
+#############
+#
+# Clock and Time Zone
+#
+#############
+
+# Controls whether to use NTP to set the clock during the install
+d-i clock-setup/ntp boolean true
+d-i clock-setup/ntp-server string {{ server['provision_img_host'] }}
+
+# You may set this to any valid setting for $TZ; see the contents of
+# /usr/share/zoneinfo/ for valid values.
+d-i time/zone string UTC
+
+# Controls whether or not the hardware clock is set to UTC.
+d-i clock-setup/utc boolean true
+d-i clock-setup/utc-auto boolean true
+
+#############
+#
+# Partitioning
+#
+#############
+
+# If one of the disks that are going to be automatically partitioned
+# contains an old LVM configuration, the user will normally receive a
+# warning. This can be preseeded away...
+d-i partman-lvm/device_remove_lvm boolean true
+
+# The same applies to pre-existing software RAID array:
+d-i partman-md/device_remove_md boolean true
+
+# And the same goes for the confirmation to write the lvm partitions.
+d-i partman-lvm/confirm boolean true
+
+d-i partman-auto/method string lvm
+d-i partman-auto/disk string /dev/sda
+
+{% include "rpc_default_lvm.j2" %}
+# This makes partman automatically partition without confirmation, provided
+# that you told it what to do using one of the methods above.
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+{% include "rpc_default_packages.j2" %}
+
+{% include "rpc_default_users.j2" %}
+
+#############
+#
+# Bootloader
+#
+#############
+
+# This is fairly safe to set, it makes grub install automatically to the MBR
+# if no other operating system is detected on the machine.
+d-i grub-installer/only_debian boolean true
+
+{% include "rpc_default_post_install.j2" %}
+
+#############
+#
+# Finish
+#
+#############
+
+# Reboot after the install is finished.
+finish-install finish-install/reboot_in_progress note
