@@ -1,0 +1,64 @@
+name: Publish to PyPI
+
+# Triggered when a GitHub Release is published. Build the sdist + wheel and
+# upload via PyPI trusted publishing (OIDC, no API token in repo secrets).
+#
+# One-time setup before this works:
+# 1. On PyPI, go to https://pypi.org/manage/project/steel_pigs/settings/publishing/
+#    and add a trusted publisher with:
+#       owner       = virtdevninja
+#       repository  = steel_pigs
+#       workflow    = publish.yml
+#       environment = pypi
+# 2. In GitHub repo settings, create an Environment named "pypi" (optional,
+#    but recommended; gives you a manual approval gate per release).
+# 3. Bump `version` in pyproject.toml before tagging the next release --
+#    PyPI rejects re-uploads of an existing version, and 0.4 is already
+#    taken by the legacy code.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # allow manual re-runs from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: pip install build
+
+      - name: Build
+        run: python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/steel_pigs
+    permissions:
+      id-token: write  # required for trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
