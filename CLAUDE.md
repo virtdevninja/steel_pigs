@@ -8,7 +8,7 @@ Steel PIGS is a Flask middleware that serves dynamically-generated iPXE boot scr
 
 The project targets **Python 3.10+** and runs on Flask 3, SQLAlchemy 2 (`Mapped[]` + `select()`), bootstrap-flask (Bootstrap 5), flask-wtf 1.x, pytest, and ruff. Packaging is pyproject.toml (PEP 621); there is no `setup.py`, `requirements.txt`, or `MANIFEST.in`.
 
-PRs should be opened against the `development` branch, not `master` (per README).
+The default branch is `main` (renamed from `master`); the old `development` branch was deleted as part of the modernization. PRs target `main`.
 
 ## Commands
 
