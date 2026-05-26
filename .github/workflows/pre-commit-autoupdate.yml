@@ -1,0 +1,61 @@
+name: Pre-commit autoupdate
+
+# Dependabot doesn't track pre-commit hook revs. This workflow bumps the
+# `rev:` lines in .pre-commit-config.yaml weekly and opens a PR with the
+# result. Manual dispatch is available from the Actions tab.
+#
+# Caveat: PRs opened by GITHUB_TOKEN do not trigger other workflow runs
+# (anti-recursion). The CI lint and test jobs will not run on the
+# autoupdate PR automatically. Either close+reopen the PR, push an empty
+# commit, or merge after testing locally.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Weekly Monday 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit autoupdate
+        run: pre-commit autoupdate
+
+      - name: Apply hooks against the tree
+        # If new hook versions auto-fix anything (ruff reformat, etc.) we
+        # want those changes in the same PR. `|| true` keeps the workflow
+        # green when hooks modify files, since create-pull-request reads
+        # the working tree state regardless.
+        run: pre-commit run --all-files || true
+
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "Update pre-commit hook versions"
+          title: "Update pre-commit hook versions"
+          body: |
+            Weekly `pre-commit autoupdate` ran and found newer hook revs.
+
+            Any auto-fixes the new versions produced against the tree are
+            included in this PR.
+
+            **Heads up:** PRs opened by `GITHUB_TOKEN` don't trigger the
+            CI workflow. Push an empty commit (or close+reopen) to make
+            CI run before merging.
+          branch: pre-commit-autoupdate
+          labels: |
+            dependencies
+            github-actions
+          delete-branch: true
