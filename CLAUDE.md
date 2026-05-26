@@ -13,7 +13,7 @@ The default branch is `main` (renamed from `master`); the old `development` bran
 ## Commands
 
 ```bash
-# Install (Python 3.10+ venv). [dev] adds pytest + ruff.
+# Install (Python 3.10+ venv). [dev] adds pytest + ruff + pre-commit.
 pip install -e ".[dev]"
 
 # Run the dev server (Flask debug mode, port 5000)
@@ -28,10 +28,10 @@ pytest                                                    # full suite
 pytest steel_pigs/tests/test_flask_app.py                 # one file
 pytest steel_pigs/tests/test_flask_app.py::TestFlaskApp::test_versions_json
 
-# Lint / format
-ruff check .
-ruff format .
-ruff format --check .   # CI mode (no writes)
+# Lint / format -- pre-commit drives ruff + hygiene hooks (CI runs the same)
+pre-commit install              # one-time, sets up the git hook
+pre-commit run --all-files      # run every hook against the whole tree
+ruff check . && ruff format .   # if you want to skip pre-commit and just run ruff
 ```
 
 ## Environment variables
