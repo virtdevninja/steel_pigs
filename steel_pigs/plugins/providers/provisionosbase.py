@@ -15,9 +15,7 @@
 import abc
 
 
-class ProvisionOsBase(object):
-    __metaclass__ = abc.ABCMeta
-
+class ProvisionOsBase(abc.ABC):
     @abc.abstractmethod
     def get_provision_script(self, server=None):
         """

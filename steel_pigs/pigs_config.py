@@ -11,37 +11,65 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
+"""Default plugin selection and runtime configuration.
 
-# this should be in the form of:
-# from plugins.providers.sql import SQL
+Secrets and per-deployment values come from environment variables:
+
+* ``STEEL_PIGS_SECRET_KEY`` -- Flask session / CSRF key. Required in
+  production. If unset, a random key is generated at import time and a
+  warning is logged; sessions will not survive a restart.
+* ``STEEL_PIGS_DATABASE_URL`` -- SQLAlchemy URL for the bundled ``SQL``
+  inventory plugin. Defaults to an in-memory sqlite database.
+
+Plugin selection (which namespace/class to load for each role) stays in
+this file -- swap the dicts below to point at your own plugins.
+"""
+
+import logging
+import os
+import secrets
+
+log = logging.getLogger(__name__)
+
+
+def _resolve_secret_key():
+    key = os.environ.get("STEEL_PIGS_SECRET_KEY")
+    if key:
+        return key
+    log.warning(
+        "STEEL_PIGS_SECRET_KEY is not set; generating a random key. "
+        "Sessions and CSRF tokens will not survive a restart."
+    )
+    return secrets.token_hex(32)
+
+
+SECRET_KEY = _resolve_secret_key()
+
 PROVIDER_PLUGIN = {
     "namespace": "steel_pigs.plugins.providers.sql",
     "class": "SQL",
-    "engine": "sqlite:///:memory:",
+    "engine": os.environ.get("STEEL_PIGS_DATABASE_URL", "sqlite:///:memory:"),
 }
 
 VERSION_PROVIDER_PLUGIN = {
     "namespace": "steel_pigs.plugins.providers.static_version",
-    "class": "StaticVersionProvider"
+    "class": "StaticVersionProvider",
 }
 
 PXE_PROVIDER_PLUGIN = {
     "namespace": "steel_pigs.plugins.providers.static_pxe_provider",
-    "class": "StaticPXEProvider"
+    "class": "StaticPXEProvider",
 }
 
 FORMATTER_PROVIDER_PLUGIN = {
     "namespace": "steel_pigs.plugins.providers.noformat",
-    "class": "NoFormatProvider"
+    "class": "NoFormatProvider",
+}
+
+PROVISION_PROVIDER_PLUGIN = {
+    "namespace": "steel_pigs.plugins.providers.rpc_os_provision",
+    "class": "RPCProvision",
 }
 
 ONLINE_COMPLETE_STATUS = "online"
 PROVISION_STATUS = "provision"
-
-PROVISION_PROVIDER_PLUGIN = {
-    "namespace": "steel_pigs.plugins.providers.rpc_os_provision",
-    "class": "RPCProvision"
-}
-
-# the app key for the flask app. This can be anything, and should be random and private
-SECRET_KEY = "Some random string here for use with the flask_wtf forms."

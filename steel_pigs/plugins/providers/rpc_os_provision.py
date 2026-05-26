@@ -12,7 +12,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from flask import render_template, make_response
+from flask import render_template
 
 from steel_pigs.exceptions.pigs_exceptions import ProvisionException
 
@@ -20,7 +20,6 @@ from .provisionosbase import ProvisionOsBase
 
 
 class RPCProvision(ProvisionOsBase):
-
     def __init__(self, config):
         pass
 

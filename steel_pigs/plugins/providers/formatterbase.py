@@ -15,9 +15,7 @@
 import abc
 
 
-class DataFormatterProvider(object):
-    __metaclass__ = abc.ABCMeta
-
+class DataFormatterProvider(abc.ABC):
     @abc.abstractmethod
     def format_switch(self, switch):
         """
