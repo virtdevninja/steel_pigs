@@ -1,54 +1,79 @@
-.. image:: https://travis-ci.org/virtdevninja/steel_pigs.svg
-    :target: https://travis-ci.org/virtdevninja/steel_pigs
-
-Steel PIGS is a python flask app that is middleware which can be configured to talk to remote inventory systems to
-pull data from them to build custom ipxe scripts. This code is based on work done by Major Hayden, and Antony Messerli
-on a project called miniplop.
+Steel PIGS is a Python Flask app that acts as middleware: it talks to remote
+inventory systems and uses their data to build custom iPXE boot scripts.
+This code is based on work done by Major Hayden and Antony Messerli on a
+project called miniplop.
 
 Installing
 ==========
-To install steel_pigs simply use pip like so ::
+The latest release on PyPI is the legacy code; to run the modernized code
+install from source ::
 
-    pip install steel_pigs
+    git clone https://github.com/virtdevninja/steel_pigs
+    cd steel_pigs
+    pip install -e .
+
+For development, install the optional ``dev`` extras (pytest + ruff) ::
+
+    pip install -e ".[dev]"
 
 
 Getting Started
 ===============
-Once steel_pigs is installed you need to create your own custom plugins. For help doing that see the `wiki <https://github.com/virtdevninja/steel-pigs/wiki>`_.
-Once you have your plugins built, installed, and have steel_pigs configured to use them simply use your favorite wsgi server
-to server the app. Using gunicorn you might do something like this ::
+Once steel_pigs is installed you need to create your own custom plugins.
+For help doing that see the `wiki <https://github.com/virtdevninja/steel-pigs/wiki>`_.
+
+Configuration is driven by environment variables:
+
+* ``STEEL_PIGS_SECRET_KEY`` -- Flask session / CSRF key. Set this in
+  production. If unset, a random key is generated at import time and a
+  warning is logged.
+* ``STEEL_PIGS_DATABASE_URL`` -- SQLAlchemy URL for the bundled ``SQL``
+  inventory plugin. Defaults to ``sqlite:///:memory:``.
+
+Plugin selection lives in ``steel_pigs/pigs_config.py``; swap the dicts to
+point at your own plugins.
+
+Once you have your plugins built, installed, and configured, serve the app
+with your favourite WSGI server. With gunicorn ::
 
     gunicorn steel_pigs.webapp:app
 
-Next you would configure something like nginx to proxy the content. You could also use mod_wsgi in Apache HTTPD.
+Then put nginx (or Apache HTTPD with mod_wsgi) in front of it.
 
 
 Contributing
 ============
-To contribute to steel-pigs please follow the fork, branch, pull request work flow. Tests are required where applicable.
-All code should follow pep8 standards, and must support python 2.7 When opening a pull request please
-do so against the development branch.
+Fork the repo, create a feature branch, open a pull request against
+``main``. Tests are required where applicable.
 
-If you wish to contribute a plugin please use the `steel_pigs_plugins <https://github.com/virtdevninja/steel_pigs_plugins>`_ project
-on GitHub.
+Lint and format with ruff before pushing ::
+
+    ruff check .
+    ruff format .
+
+Run the test suite with pytest ::
+
+    pytest
+
+If you wish to contribute a plugin please use the
+`steel_pigs_plugins <https://github.com/virtdevninja/steel_pigs_plugins>`_
+project on GitHub.
 
 
 Python Support
 ==============
-* steel-pigs 0.1 and later support Python 2.7
+* Python 3.10+ (Flask 3, SQLAlchemy 2, bootstrap-flask)
+
+Earlier versions of steel_pigs targeted Python 2.7; that support was
+dropped during the modernization.
 
 
 Reporting Issues
 ================
-To report a problem with steel-pigs or to make a feature request open an
+To report a problem or request a feature open an
 `issue <https://github.com/virtdevninja/steel-pigs/issues>`_ on GitHub.
 
 
 Usage Examples
 ==============
-See the `wiki <https://github.com/virtdevninja/steel-pigs/wiki>`_ on GitHub
-
-
-Releases
-========
-Coming soon!
+See the `wiki <https://github.com/virtdevninja/steel-pigs/wiki>`_ on GitHub.
