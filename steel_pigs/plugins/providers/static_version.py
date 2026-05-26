@@ -16,7 +16,6 @@ from .versionbase import VersionProviderBase
 
 
 class StaticVersionProvider(VersionProviderBase):
-
     def __init__(self, config):
         pass
 
@@ -30,21 +29,24 @@ class StaticVersionProvider(VersionProviderBase):
             "cloud_files": {
                 "cdn_url": "http://cloudfiles.rpc.local",
                 "container": "private",
-                "torrent_url": "torrent://torrents.rpc.local"
+                "torrent_url": "torrent://torrents.rpc.local",
             },
             "region": "ORD",
             "last_checked_date": "Thu, 08 Oct 2015 20:30:04 +0000",
             "last_checked": 1444336204,
-            "projects": {"squashible-kvm-fedora23": {"files": [
-                "squashible-kvm-fedora23/27/initrd.img",
-                "squashible-kvm-fedora23/27/rootfs.img.tgz",
-                "squashible-kvm-fedora23/27/squashible-kvm-fedora23-27-DFW.torrent",
-                "squashible-kvm-fedora23/27/squashible-kvm-fedora23-27-ORD.torrent",
-                "squashible-kvm-fedora23/27/squashible-kvm-fedora23-27.torrent",
-                "squashible-kvm-fedora23/27/vmlinuz"
-            ],
-                "latest": 27
-            }}
+            "projects": {
+                "squashible-kvm-fedora23": {
+                    "files": [
+                        "squashible-kvm-fedora23/27/initrd.img",
+                        "squashible-kvm-fedora23/27/rootfs.img.tgz",
+                        "squashible-kvm-fedora23/27/squashible-kvm-fedora23-27-DFW.torrent",
+                        "squashible-kvm-fedora23/27/squashible-kvm-fedora23-27-ORD.torrent",
+                        "squashible-kvm-fedora23/27/squashible-kvm-fedora23-27.torrent",
+                        "squashible-kvm-fedora23/27/vmlinuz",
+                    ],
+                    "latest": 27,
+                }
+            },
         }
 
     def get_latest_ipxe(self, project=None):

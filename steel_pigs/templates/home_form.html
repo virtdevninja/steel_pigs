@@ -1,14 +1,12 @@
-{% import "bootstrap/wtf.html" as wtf %}
-
-{%- extends "base.html" %}
+{% extends "base.html" %}
+{% from "bootstrap5/form.html" import render_form %}
 
 {% block content %}
 <div class="container">
-    <div class="jumbotron">
+    <div class="p-5 mb-4 bg-light rounded-3">
         <h1>Locate Your Server</h1>
         <p>Note: Your data isn't going anywhere.</p>
     </div>
-    <div class="col-md-12">
-        {{wtf.quick_form(form)}}
-    </div>
-{%- endblock %}
+    {{ render_form(form) }}
+</div>
+{% endblock %}

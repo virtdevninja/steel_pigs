@@ -14,91 +14,97 @@
 
 import logging
 from contextlib import contextmanager
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
-from sqlalchemy.orm import relationship
+
+from sqlalchemy import ForeignKey, String, create_engine, select
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
+
 from .pluginbase import ProviderPluginBase
 
-Base = declarative_base()
+log = logging.getLogger(__name__)
 
 
-class ServerDataModel(Base):
-    __tablename__ = 'ServerData'
-    id = Column(Integer, primary_key=True)
-    server_number = Column(Integer, unique=True, nullable=False)
-    primary_ip = Column(String(15), nullable=False)
-    primary_gw = Column(String(15), nullable=False)
-    primary_nm = Column(String(15), nullable=False)
-    primary_mac = Column(String(20), nullable=False)
-    drac_ip = Column(String(15), nullable=True)
-    drac_gw = Column(String(15), nullable=True)
-    drac_nm = Column(String(15), nullable=True)
-    hostname = Column(String(255), nullable=False)
-    dns_domain_name = Column(String(255), default="rpc.local")
-    dns_server_primary = Column(String(15), nullable=False)
-    dns_server_secondary = Column(String(15), nullable=True)
-    dns_server_tertiary = Column(String(15), nullable=True)
-    bootstrapped = Column(Boolean, nullable=False)
-    boot_os = Column(String(255), nullable=False)
-    boot_os_version = Column(String(64), nullable=False)
-    boot_profile = Column(String(128), nullable=False)
-    boot_status = Column(String(128), nullable=False)
-    operational_status = Column(String(255), nullable=False)
-    ntp_server = Column(String(128), nullable=False)
-    switches = relationship("SwitchInfo", backref="ServerData")
-    provision_zone_id = Column(Integer, ForeignKey('ProvisionZone.id'))
-    provision_zone = relationship("ProvisionZone")
+class Base(DeclarativeBase):
+    pass
 
 
 class ProvisionZone(Base):
     __tablename__ = "ProvisionZone"
-    id = Column(Integer, primary_key=True)
-    zone_name = Column(String(128), unique=True, nullable=False)
-    provision_img_host = Column(String(128), nullable=False)
-    provision_mirror_host = Column(String(128), nullable=False)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    zone_name: Mapped[str] = mapped_column(String(128), unique=True)
+    provision_img_host: Mapped[str] = mapped_column(String(128))
+    provision_mirror_host: Mapped[str] = mapped_column(String(128))
+
+
+class ServerDataModel(Base):
+    __tablename__ = "ServerData"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    server_number: Mapped[int] = mapped_column(unique=True)
+    primary_ip: Mapped[str] = mapped_column(String(15))
+    primary_gw: Mapped[str] = mapped_column(String(15))
+    primary_nm: Mapped[str] = mapped_column(String(15))
+    primary_mac: Mapped[str] = mapped_column(String(20))
+    drac_ip: Mapped[str | None] = mapped_column(String(15))
+    drac_gw: Mapped[str | None] = mapped_column(String(15))
+    drac_nm: Mapped[str | None] = mapped_column(String(15))
+    hostname: Mapped[str] = mapped_column(String(255))
+    dns_domain_name: Mapped[str] = mapped_column(String(255), default="rpc.local")
+    dns_server_primary: Mapped[str] = mapped_column(String(15))
+    dns_server_secondary: Mapped[str | None] = mapped_column(String(15))
+    dns_server_tertiary: Mapped[str | None] = mapped_column(String(15))
+    bootstrapped: Mapped[bool]
+    boot_os: Mapped[str] = mapped_column(String(255))
+    boot_os_version: Mapped[str] = mapped_column(String(64))
+    boot_profile: Mapped[str] = mapped_column(String(128))
+    boot_status: Mapped[str] = mapped_column(String(128))
+    operational_status: Mapped[str] = mapped_column(String(255))
+    ntp_server: Mapped[str] = mapped_column(String(128))
+
+    provision_zone_id: Mapped[int | None] = mapped_column(ForeignKey("ProvisionZone.id"))
+    provision_zone: Mapped[ProvisionZone | None] = relationship()
+    switches: Mapped[list["SwitchInfo"]] = relationship(back_populates="server")
 
 
 class SwitchInfo(Base):
     __tablename__ = "SwitchInfo"
-    id = Column(Integer, primary_key=True)
-    switch_name = Column(String(255), nullable=False)
-    switch_port = Column(String(255), nullable=False)
-    server_number = Column(Integer, ForeignKey("ServerData.server_number"))
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    switch_name: Mapped[str] = mapped_column(String(255))
+    switch_port: Mapped[str] = mapped_column(String(255))
+    server_number: Mapped[int | None] = mapped_column(ForeignKey("ServerData.server_number"))
+    server: Mapped[ServerDataModel | None] = relationship(back_populates="switches")
+
+
+def _row_to_dict(row):
+    if row is None:
+        return None
+    d = dict(row.__dict__)
+    d.pop("_sa_instance_state", None)
+    return d
 
 
 class SQL(ProviderPluginBase):
-    _engine = None
+    """SQLAlchemy-backed inventory provider.
+
+    Config dict must include 'engine' (a SQLAlchemy URL). Example:
+        {'engine': 'sqlite:///:memory:'}
+    """
 
     def __init__(self, config):
-        """
-        Pass in a dict that has required info in it for the plugin configuration.
-
-        The only required key is 'engine' Below is an example using an in memory
-        sqlite database:
-
-        {
-            'engine': "sqlite:///:memory:"
-        }
-
-        :param config: dictionary that contains required info for the plugin
-        :return:
-        """
-        self._engine = config['engine']
-        self.engine = create_engine(self._engine, echo=False)
-        self.sessionmaker = None
+        self.engine = create_engine(config["engine"], echo=False)
+        self._session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
         Base.metadata.create_all(self.engine)
 
     @contextmanager
     def _session_scope(self):
-        """Return a session context to wrap around db operations.
-        example:
-        with db.session_scope() as session:
-            # do some inserts
-        :returns: Session context
-        """
-        session = self._get_session()
+        session = self._session_factory()
         try:
             yield session
             session.commit()
@@ -108,188 +114,76 @@ class SQL(ProviderPluginBase):
         finally:
             session.close()
 
-    def _get_session(self):
-        """
-
-        :return: sessionmaker
-        """
-        if not self.engine:
-            raise Exception('Engine not created yet.')
-
-        # Check for session maker
-        if not self.sessionmaker:
-            self.sessionmaker = sessionmaker(bind=self.engine)
-
-        # Call session maker for session
-        return self.sessionmaker(bind=self.engine)
-
-    @staticmethod
-    def _query_to_dict(data):
-        if isinstance(data, ProvisionZone):
-            dictret = dict(data.__dict__)
-            dictret.pop('_sa_instance_state', None)
-            return dictret
-        if len(data) != 1:
-            return
-        dictret = dict(data[0].__dict__)
-        dictret.pop('_sa_instance_state', None)
-        return dictret
-
     def get_server_by_name(self, name):
-        """
-        Retrieve data about a server by name and return an object that
-        represents it.
-        """
-        with self._session_scope() as session:
-            query = session.query(ServerDataModel).filter(
-                ServerDataModel.hostname == name
-            ).limit(1)
-            results = query.all()
-            results = self._query_to_dict(results)
-        return results
+        stmt = select(ServerDataModel).where(ServerDataModel.hostname == name).limit(1)
+        with self._session_scope() as s:
+            return _row_to_dict(s.execute(stmt).scalar_one_or_none())
 
     def get_server_by_number(self, number):
-        """
-        Retrieve data about a server and return a dict that
-        represents it.
-
-        :param number: The device number or asset number of a given server
-        :return: returns a dict that represents a server
-        """
-        with self._session_scope() as session:
-            query = session.query(ServerDataModel).filter(
-                ServerDataModel.server_number == number
-            ).limit(1)
-            results = query.all()
-            ret = self._query_to_dict(results)
-            prov = results[0].provision_zone
-            prov_d = self._query_to_dict(prov)
-            ret["provision_zone"] = prov_d
-        return ret
+        stmt = select(ServerDataModel).where(ServerDataModel.server_number == number).limit(1)
+        with self._session_scope() as s:
+            server = s.execute(stmt).scalar_one_or_none()
+            if server is None:
+                return None
+            ret = _row_to_dict(server)
+            ret["provision_zone"] = _row_to_dict(server.provision_zone)
+            return ret
 
     def get_server_by_mac(self, mac):
-        """
-        Returns a server_data dict for a given server based on the primary mac address
-
-        :param mac: String representing the mac address of a given server
-        :return: returns a dict that represents a server
-        """
-        with self._session_scope() as session:
-            query = session.query(ServerDataModel).filter(
-                ServerDataModel.primary_mac == mac
-            ).limit(1)
-            results = query.all()
-            results = self._query_to_dict(results)
-        return results
+        stmt = select(ServerDataModel).where(ServerDataModel.primary_mac == mac).limit(1)
+        with self._session_scope() as s:
+            return _row_to_dict(s.execute(stmt).scalar_one_or_none())
 
     def get_server_by_switch(self, switch_name, switch_port):
-        """
-        Fetch a server_data object using the provided switch info
+        stmt = (
+            select(SwitchInfo)
+            .where(SwitchInfo.switch_name == switch_name)
+            .where(SwitchInfo.switch_port == switch_port)
+            .limit(1)
+        )
+        with self._session_scope() as s:
+            return _row_to_dict(s.execute(stmt).scalar_one_or_none())
 
-        :param switch_name:
-        :param switch_port:
-        :return:
-        """
-        with self._session_scope() as session:
-            query = session.query(SwitchInfo).filter(
-                SwitchInfo.switch_name == switch_name and SwitchInfo.switch_port == switch_port
-            ).limit(1)
-            result = query.all()
-            retdict = self._query_to_dict(result)
-        return retdict
+    def _update_server_attr(self, server_number, attr, value):
+        stmt = select(ServerDataModel).where(ServerDataModel.server_number == server_number)
+        with self._session_scope() as s:
+            server = s.execute(stmt).scalar_one_or_none()
+            if server is None:
+                return None
+            setattr(server, attr, value)
+            return server
 
     def set_boot_status(self, server_number, status):
-        """
-        Sets the boot_status of a given server
-
-        :param server_number:
-        :param status:
-        :return: Python dict that will be jsonified by flask and returned to user
-        """
-        logging.info("Setting boot status to {} for {}".format(
-            status, server_number
-        ))
-        with self._session_scope() as session:
-            server = session.query(ServerDataModel).filter_by(
-                server_number=server_number
-            ).first()
-            if server:
-                server.boot_status = status
-                session.commit()
-                return {"operation": "success", "status_set": status}
-            logging.info("Unable to locate {} to set its boot status.".format(
-                server_number
-            ))
+        log.info("Setting boot status to %s for %s", status, server_number)
+        if self._update_server_attr(server_number, "boot_status", status) is None:
+            log.info("Unable to locate %s to set its boot status.", server_number)
             return {"operation": "failure", "status_set": "unable to locate device"}
+        return {"operation": "success", "status_set": status}
 
-    def set_boot_os(self, server_number, os):
-        """
-        Sets the boot_os of a given server
-
-        :param server_number:
-        :param os:
-        :return: Python dict that will be jsonified by flask and returned to user
-        """
-        logging.info("Setting boot os on {} to {}".format(
-            server_number, os
-        ))
-        with self._session_scope() as session:
-            server = session.query(ServerDataModel).filter_by(
-                server_number=server_number
-            ).first()
-            if server:
-                logging.info("Found server {}. Setting os to {}".format(
-                    server_number, os
-                ))
-                server.boot_os = os
-                session.commit()
-                logging.info("Updated boot os.")
-                return {"operation": "success", "os_set": os}
-            logging.info("Unable to locate {} to update boot os".format(server_number))
+    def set_boot_os(self, server_number, boot_os):
+        log.info("Setting boot os on %s to %s", server_number, boot_os)
+        if self._update_server_attr(server_number, "boot_os", boot_os) is None:
+            log.info("Unable to locate %s to update boot os", server_number)
+            # NOTE: the original API used a different failure key here
+            # ('set_boot_os') than the success key ('os_set'). Preserved for
+            # backwards compatibility with any existing clients.
             return {"operation": "failure", "set_boot_os": "unable to locate device"}
+        log.info("Updated boot os.")
+        return {"operation": "success", "os_set": boot_os}
 
     def set_operational_status(self, server_number, status):
-        """
-        Sets the boot_status of a given server
-
-        :param server_number:
-        :param status:
-        :return: Python dict that will be jsonified by flask and returned to user
-        """
-        logging.info("Setting Op status on {} to {}".format(
-            server_number, status
-        ))
-        with self._session_scope() as session:
-            server = session.query(ServerDataModel).filter_by(
-                server_number=server_number
-            ).first()
-            if server:
-                logging.info("Found server {}".format(server_number))
-                server.operational_status = status
-                session.commit()
-                return {"operation": "success", "status_set": status}
-            logging.info("Unable to locate server {}".format(server_number))
+        log.info("Setting Op status on %s to %s", server_number, status)
+        if self._update_server_attr(server_number, "operational_status", status) is None:
+            log.info("Unable to locate server %s", server_number)
             return {"operation": "failure", "status_set": "unable to locate device"}
+        return {"operation": "success", "status_set": status}
 
     def create_entry(self, server_info):
-        """
-        This method should likely only be used in your tests so you can populate
-        an in memory or on disk db with info.
-
-        :param server_info: ServerDataModel object
-        :return: None
-        """
-        with self._session_scope() as session:
-            session.add(server_info)
-            session.commit()
+        """Insert a ServerDataModel row. Intended for tests / data loading."""
+        with self._session_scope() as s:
+            s.add(server_info)
 
     def add_switch_entry(self, switch_info):
-        """
-        This is only used to facilitate with testing.
-
-        :param switch_info:
-        :return:
-        """
-        with self._session_scope() as session:
-            session.add(switch_info)
-            session.commit()
+        """Insert a SwitchInfo row. Intended for tests / data loading."""
+        with self._session_scope() as s:
+            s.add(switch_info)

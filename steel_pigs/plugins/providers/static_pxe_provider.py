@@ -12,49 +12,37 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 import json
-
+import textwrap
 from time import gmtime, strftime
 
-from flask import render_template, make_response
+from flask import make_response, render_template
 
 from .ipxebase import PXEProvider
 
 
 class StaticPXEProvider(PXEProvider):
-
     def __init__(self, *args, **kwargs):
         pass
 
     def generate_ipxe_script(self, *args, **kwargs):
-        """
-        Returns an iPXE script using the provided args and kwargs
-
-        :param args:
-        :param kwargs:
-        :return:
-        """
+        """Render an iPXE script from the configured Jinja template."""
         request = kwargs.get("request")
         server_data = kwargs.get("server_data")
         timestamp = strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())
-        server_data_dump = self._indenter(server_data)
-        data = render_template("pigs.ipxe",
-                               server_data=server_data,
-                               server_data_dump=server_data_dump,
-                               server_hostname=server_data["hostname"],
-                               terraform_ip=request.args.get("terraform_ip"),
-                               request=request,
-                               timestamp=timestamp)
+        data = render_template(
+            "pigs.ipxe",
+            server_data=server_data,
+            server_data_dump=self._indenter(server_data),
+            server_hostname=server_data["hostname"],
+            terraform_ip=request.args.get("terraform_ip"),
+            request=request,
+            timestamp=timestamp,
+        )
         r = make_response(data)
         r.mimetype = "text/plain"
         return r
 
-    def _indenter(self, text_to_indent):
-        """
-        Transforms the indented json.dumps() output into a commented form to go
-        into the iPXE script.  This would have been less hackish if the textwrap
-        module in Python 2.7 wasn't so awful.
-        """
-        temp = ""
-        for line in json.dumps(text_to_indent, indent=2).split('\n'):
-            temp += "#   %s\n" % line
-        return temp.strip()
+    @staticmethod
+    def _indenter(data):
+        """Format a JSON dump as iPXE-style ``#   ``-prefixed comments."""
+        return textwrap.indent(json.dumps(data, indent=2), "#   ").rstrip()

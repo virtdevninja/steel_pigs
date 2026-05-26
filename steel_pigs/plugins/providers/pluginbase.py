@@ -14,9 +14,8 @@
 
 import abc
 
-class ProviderPluginBase(object):
-    __metaclass__ = abc.ABCMeta
 
+class ProviderPluginBase(abc.ABC):
     @abc.abstractmethod
     def get_server_by_name(self, name):
         """

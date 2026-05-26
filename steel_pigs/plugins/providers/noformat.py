@@ -16,7 +16,6 @@ from .formatterbase import DataFormatterProvider
 
 
 class NoFormatProvider(DataFormatterProvider):
-
     def __init__(self, config):
         pass
 

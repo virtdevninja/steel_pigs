@@ -12,25 +12,25 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from flask import Blueprint, render_template, flash, redirect, url_for
+from flask import Blueprint, flash, redirect, render_template, url_for
 from markupsafe import escape
 
 from .forms import SearchByNameForm
 
-frontend = Blueprint('frontend', __name__)
+frontend = Blueprint("frontend", __name__)
 
 
 # Our index-page just shows a quick explanation. Check out the template
 # "templates/index.html" documentation for more details.
-@frontend.route('/')
+@frontend.route("/")
 def index():
     form = SearchByNameForm()
 
-    return render_template('home_form.html', form=form)
+    return render_template("home_form.html", form=form)
 
 
 # Shows a long signup form, demonstrating form rendering.
-@frontend.route('/find_by_name/', methods=('GET', 'POST'))
+@frontend.route("/find_by_name/", methods=("GET", "POST"))
 def find_by_name():
     form = SearchByNameForm()
 
@@ -40,10 +40,9 @@ def find_by_name():
         #
         # Note that the default flashed messages rendering allows HTML, so
         # we need to escape things if we input user values:
-        flash('Hello, {}. You have successfully signed up'
-              .format(escape(form.server_name.data)))
+        flash(f"Hello, {escape(form.server_name.data)}. You have successfully signed up")
 
         # In a real application, you may wish to avoid this tedious redirect.
-        return redirect(url_for('.index'))
+        return redirect(url_for(".index"))
 
-    return render_template('home_form.html', form=form)
+    return render_template("home_form.html", form=form)

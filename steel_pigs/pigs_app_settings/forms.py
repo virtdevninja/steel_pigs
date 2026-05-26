@@ -12,29 +12,25 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from flask_wtf import Form
-from wtforms.fields import *
+from flask_wtf import FlaskForm
+from wtforms.fields import IntegerField, StringField, SubmitField
 from wtforms.validators import MacAddress, Regexp
 
 
-class SearchByNameForm(Form):
-    server_name = StringField(u'Server Name')
-    submit = SubmitField(u'Get iPXE script')
+class SearchByNameForm(FlaskForm):
+    server_name = StringField("Server Name")
+    submit = SubmitField("Get iPXE script")
 
 
-class SearchByNumberForm(Form):
-    server_number = IntegerField(u'Server Number', validators=[
-        Regexp(
-            regex="\d+",
-            message="Only valid numbers are allowed"
-        )
-    ])
-    submit = SubmitField(u'Get iPXE script')
+class SearchByNumberForm(FlaskForm):
+    server_number = IntegerField(
+        "Server Number", validators=[Regexp(regex=r"\d+", message="Only valid numbers are allowed")]
+    )
+    submit = SubmitField("Get iPXE script")
 
 
-class SearchByMacForm(Form):
-    server_mac = StringField(u'Server MAC address', validators=[MacAddress(
-        message="Must use a valid MAC address."
-    )])
-    submit = SubmitField(u'Get iPXE script')
-
+class SearchByMacForm(FlaskForm):
+    server_mac = StringField(
+        "Server MAC address", validators=[MacAddress(message="Must use a valid MAC address.")]
+    )
+    submit = SubmitField("Get iPXE script")

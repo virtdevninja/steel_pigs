@@ -14,9 +14,7 @@
 import abc
 
 
-class VersionProviderBase(object):
-    __metaclass__ = abc.ABCMeta
-
+class VersionProviderBase(abc.ABC):
     @abc.abstractmethod
     def get_latest_versions(self):
         """

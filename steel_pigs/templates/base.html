@@ -1,28 +1,31 @@
-{%- extends "bootstrap/base.html" %}
-
-{% block title %}Steel PIGS -- Powerful iPXE Generation Service{% endblock %}
-
-{# enable fixes for legacy browsers. First we need to import the necessary macros: #}
-{% import "bootstrap/fixes.html" as fixes %}
-
-{# Inside head block we apply them. To not replace the header,
-``super()`` is used: #}
-{% block head %}
-{{super()}}
-{{fixes.ie8()}}
-{%- endblock %}
-
-{% import "bootstrap/utils.html" as utils %}
-
-{# Adding custom CSS files is also done here. Check documentation at
-http://pythonhosted.org/Flask-Bootstrap/basic-usage.html#available-blocks
-for overview. #}
-{% block styles -%}
-{# do not forget to call super or Bootstrap's own stylesheets will disappear! #}
-{{super()}}
-{% endblock %}
-
-{# Finally, round things out with navigation #}
-{% block navbar %}
-{{nav.frontend_top.render()}}
-{% endblock %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Steel PIGS -- Powerful iPXE Generation Service{% endblock %}</title>
+    {{ bootstrap.load_css() }}
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('frontend.index') }}">Steel PIGS</a>
+        <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('frontend.find_by_name') }}">Search By Name</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="https://github.com/virtdevninja/steel_pigs/wiki" target="_blank" rel="noopener">Wiki</a>
+            </li>
+        </ul>
+    </div>
+</nav>
+{% with messages = get_flashed_messages() %}
+    {% for message in messages %}
+        <div class="container"><div class="alert alert-info">{{ message }}</div></div>
+    {% endfor %}
+{% endwith %}
+{% block content %}{% endblock %}
+{{ bootstrap.load_js() }}
+</body>
+</html>

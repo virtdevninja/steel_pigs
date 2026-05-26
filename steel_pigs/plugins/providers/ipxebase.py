@@ -15,9 +15,7 @@
 import abc
 
 
-class PXEProvider(object):
-    __metaclass__ = abc.ABCMeta
-
+class PXEProvider(abc.ABC):
     @abc.abstractmethod
     def generate_ipxe_script(self, *args, **kwargs):
         """

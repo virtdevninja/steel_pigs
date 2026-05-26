@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "steel_pigs"
+version = "0.4"
+description = "Powerful iPXE Generation Service"
+readme = "README.rst"
+license = "Apache-2.0"
+authors = [{name = "Michael Rice", email = "michael@michaelrice.org"}]
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "Flask>=3.0",
+    "bootstrap-flask>=2.3",
+    "flask-wtf>=1.2",
+    "wtforms>=3.1",
+    "sqlalchemy>=2.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/virtdevninja/steel_pigs"
+Repository = "https://github.com/virtdevninja/steel_pigs"
+
+[tool.setuptools.packages.find]
+include = ["steel_pigs*"]
+exclude = ["steel_pigs.tests*"]
+
+[tool.setuptools.package-data]
+steel_pigs = ["templates/*", "templates/**/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long; formatter handles it
+]
+
+[tool.ruff.format]
+quote-style = "double"

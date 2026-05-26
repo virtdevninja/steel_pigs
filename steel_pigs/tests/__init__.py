@@ -15,68 +15,54 @@
 import logging
 import unittest
 
-from steel_pigs.plugins.providers.sql import ServerDataModel, SwitchInfo, ProvisionZone
-from steel_pigs.plugins.providers.sql import SQL
+from steel_pigs.plugins.providers.sql import SQL, ProvisionZone, ServerDataModel, SwitchInfo
 
-config = {'engine': "sqlite:///:memory:"}
+
+def make_seed_data():
+    """Build a fresh set of ORM objects for an in-memory SQL plugin."""
+    p_zone = ProvisionZone(
+        provision_img_host="10.12.1.10",
+        provision_mirror_host="10.12.1.10",
+        zone_name="DFW1",
+    )
+    server = ServerDataModel(
+        boot_os="Ubuntu",
+        boot_os_version="14.04.2",
+        boot_profile="Unknown",
+        boot_status="Kicking",
+        bootstrapped=False,
+        dns_domain_name="rpc.local",
+        dns_server_primary="8.8.8.8",
+        hostname="hogzilla",
+        operational_status="Provisioning",
+        primary_gw="10.12.1.1",
+        primary_ip="10.12.1.10",
+        primary_mac="00:11:22:33:44:55",
+        primary_nm="255.255.255.0",
+        server_number=555121,
+        ntp_server="10.12.1.10",
+        provision_zone=p_zone,
+    )
+    switches = [
+        SwitchInfo(server_number=555121, switch_name="Switch 01", switch_port="1"),
+        SwitchInfo(server_number=555121, switch_name="Switch 01", switch_port="2"),
+    ]
+    return {"server_data": server, "switch_info": switches}
+
+
+def seed_sql_plugin(sql_plugin):
+    data = make_seed_data()
+    sql_plugin.create_entry(data["server_data"])
+    for switch in data["switch_info"]:
+        sql_plugin.add_switch_entry(switch)
 
 
 class PigTests(unittest.TestCase):
+    """Base class for tests that exercise the SQL plugin in isolation."""
 
     @classmethod
     def setUpClass(cls):
-        cls.sql = SQL(config)
         logging.basicConfig()
-        log = logging.getLogger(__name__)
-        log.setLevel(logging.DEBUG)
-        cls._add_entry()
-
-    @classmethod
-    def _add_entry(cls):
-        data = cls._create_entry_data()
-        server_data = data["server_data"]
-        switch_info = data["switch_info"]
-        cls.sql.create_entry(server_data)
-        for switch in switch_info:
-            cls.sql.add_switch_entry(switch)
-
-    @classmethod
-    def _create_entry_data(cls):
-        data = {}
-        p_zone = ProvisionZone()
-        p_zone.provision_img_host = "10.12.1.10"
-        p_zone.provision_mirror_host = "10.12.1.10"
-        p_zone.zone_name = "DFW1"
-        server_entry = ServerDataModel()
-        server_entry.boot_os = "Ubuntu"
-        server_entry.boot_os_version = "14.04.2"
-        server_entry.boot_profile = "Unknown"
-        server_entry.boot_status = "Kicking"
-        server_entry.bootstrapped = False
-        server_entry.dns_domain_name = "rpc.local"
-        server_entry.dns_server_primary = "8.8.8.8"
-        server_entry.hostname = "hogzilla"
-        server_entry.operational_status = "Provisioning"
-        server_entry.primary_gw = "10.12.1.1"
-        server_entry.primary_ip = "10.12.1.10"
-        server_entry.primary_mac = "00:11:22:33:44:55"
-        server_entry.primary_nm = "255.255.255.0"
-        server_entry.server_number = 555121
-        server_entry.ntp_server = "10.12.1.10"
-        server_entry.provision_zone = p_zone
-        data["server_data"] = server_entry
-        switch_entry = SwitchInfo()
-        switch_entry.server_number = 555121
-        switch_entry.switch_name = "Switch 01"
-        switch_entry.switch_port = "1"
-        switch_entry1 = SwitchInfo()
-        switch_entry1.server_number = 555121
-        switch_entry1.switch_name = "Switch 01"
-        switch_entry1.switch_port = "2"
-        data["switch_info"] = [switch_entry, switch_entry1]
-        return data
-
-    def setUp(self):
-        logging.basicConfig()
-        log = logging.getLogger()
-        log.setLevel(logging.DEBUG)
+        logging.getLogger().setLevel(logging.DEBUG)
+        cls.sql = SQL({"engine": "sqlite:///:memory:"})
+        seed_sql_plugin(cls.sql)

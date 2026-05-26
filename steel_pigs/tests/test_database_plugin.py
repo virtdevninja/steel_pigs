@@ -16,13 +16,13 @@ import unittest
 
 from sqlalchemy.exc import IntegrityError
 
-from steel_pigs.tests import PigTests
+from steel_pigs.tests import PigTests, seed_sql_plugin
+
 
 class TestSQL(PigTests):
-
     def test_duplicate_server_number_not_allowed(self):
         with self.assertRaises(IntegrityError):
-            self._add_entry()
+            seed_sql_plugin(self.sql)
 
     def test_find_by_name(self):
         name = "hogzilla"
@@ -32,7 +32,7 @@ class TestSQL(PigTests):
     def test_find_by_number(self):
         number = 555121
         entry = self.sql.get_server_by_number(number)
-        print entry
+        print(entry)
         self.assertEqual(number, entry["server_number"])
 
     def test_find_by_number_works_using_string(self):
@@ -73,11 +73,20 @@ class TestSQL(PigTests):
         switch_port = "1"
         entry = self.sql.get_server_by_switch(switch_name, switch_port)
         self.assertEqual(555121, entry["server_number"])
+        self.assertEqual("1", entry["switch_port"])
+
+    def test_find_server_by_switch_filters_on_both_name_and_port(self):
+        # Regression: the original implementation used Python `and`, which
+        # short-circuited to filter only on switch_port. Make sure mismatched
+        # switch_name returns nothing even when switch_port matches.
+        entry = self.sql.get_server_by_switch("nonexistent switch", "1")
+        self.assertIsNone(entry)
 
     def test_provision_zone_is_dfw(self):
         number = 555121
         s = self.sql.get_server_by_number(number)
         self.assertEqual(s["provision_zone"]["zone_name"], "DFW1")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
