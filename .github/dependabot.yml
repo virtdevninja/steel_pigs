@@ -1,0 +1,46 @@
+version: 2
+
+# Notes on the configuration:
+# * Minor and patch updates are grouped per-ecosystem so the team gets one
+#   PR per week per group instead of one PR per dependency. Major updates
+#   stay as individual PRs because they usually need careful review.
+# * `dependency-type` for pip splits production deps (Flask, SQLAlchemy,
+#   bootstrap-flask, flask-wtf, wtforms) from development deps (pytest,
+#   ruff) so test/lint bumps don't block on production risk and vice versa.
+
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+    open-pull-requests-limit: 5
+    groups:
+      production-minor-patch:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      development-minor-patch:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    open-pull-requests-limit: 3
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
