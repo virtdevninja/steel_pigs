@@ -1,3 +1,7 @@
+.. image:: https://github.com/virtdevninja/steel_pigs/actions/workflows/ci.yml/badge.svg?branch=main
+    :target: https://github.com/virtdevninja/steel_pigs/actions/workflows/ci.yml
+    :alt: CI
+
 Steel PIGS is a Python Flask app that acts as middleware: it talks to remote
 inventory systems and uses their data to build custom iPXE boot scripts.
 This code is based on work done by Major Hayden and Antony Messerli on a
