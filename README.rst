@@ -50,10 +50,16 @@ Contributing
 Fork the repo, create a feature branch, open a pull request against
 ``main``. Tests are required where applicable.
 
-Lint and format with ruff before pushing ::
+After cloning, install the pre-commit hooks once. They run ruff and a
+handful of hygiene checks on every commit, and CI runs the same hooks
+so what you see locally is what CI checks ::
 
-    ruff check .
-    ruff format .
+    pre-commit install
+
+Run all hooks against the whole tree before pushing if you want to be
+sure ::
+
+    pre-commit run --all-files
 
 Run the test suite with pytest ::
 
