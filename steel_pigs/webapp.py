@@ -70,6 +70,18 @@ def _plugins() -> Plugins:
     return current_app.extensions["steel_pigs"]
 
 
+def _log_safe(value):
+    """Render a value for logging with CR/LF stripped (CWE-117 defense).
+
+    ``repr()`` already escapes embedded newlines in string fields, but
+    CodeQL's dataflow analysis doesn't recognize ``%r`` formatting as a
+    sanitizer for the py/log-injection rule. The explicit
+    ``.replace()`` chain makes the sanitizer visible to static analysis
+    and is a no-op in practice on repr output.
+    """
+    return repr(value).replace("\n", "").replace("\r", "")
+
+
 def _validated_status(value, enum_cls):
     """Lowercase + validate ``value`` against ``enum_cls``.
 
@@ -112,7 +124,7 @@ def readyz():
 @api.route("/pxe/configs/<config_file>")
 def get_pxe_script(config_file=None):
     """Render an iPXE script for the requested server."""
-    log.info("Request to /pxe with params: %s", dict(request.args))
+    log.info("Request to /pxe with params: %s", _log_safe(dict(request.args)))
     p = _plugins()
     args = request.args
     # NOTE(major): This dispatch chain is preserved from the original code -
@@ -139,7 +151,7 @@ def get_pxe_script(config_file=None):
 @api.route("/hardware")
 def get_hardware_specs():
     """iPXE can't match strings with spaces; we strip them and re-emit."""
-    log.info("Request to /hardware with params: %s", dict(request.args))
+    log.info("Request to /hardware with params: %s", _log_safe(dict(request.args)))
     manufacturer = request.args.get("manufacturer")
     product = request.args.get("product")
     if manufacturer is None or product is None:
@@ -211,7 +223,7 @@ def legacy_set_operational_status_get():
 @api.route("/provision/os/start")
 def begin_os_provisioning():
     """Return a provision (kickstart / preseed) script for a device by MAC."""
-    log.info("Fetching provision start: %s", dict(request.args))
+    log.info("Fetching provision start: %s", _log_safe(dict(request.args)))
     server_mac = request.args.get("mac")
     if server_mac is None:
         abort(412, description="Missing required param: mac")
