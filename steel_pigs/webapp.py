@@ -13,6 +13,7 @@
 #   limitations under the License.
 
 import logging
+import uuid
 from dataclasses import dataclass
 from importlib import import_module
 from typing import Any
@@ -22,6 +23,7 @@ from flask import (
     Flask,
     abort,
     current_app,
+    g,
     jsonify,
     make_response,
     render_template,
@@ -29,7 +31,8 @@ from flask import (
 )
 from flask_bootstrap import Bootstrap5
 
-from . import pigs_config
+from . import audit, pigs_config
+from .auth import requires_auth
 from .pigs_app_settings.frontend import frontend
 from .states import BootStatus, OperationalStatus
 
@@ -43,6 +46,7 @@ class Plugins:
     formatter: Any
     pxe: Any
     provision: Any
+    auth: Any
 
 
 _PLUGIN_SPECS = {
@@ -51,6 +55,7 @@ _PLUGIN_SPECS = {
     "formatter": "FORMATTER_PROVIDER_PLUGIN",
     "pxe": "PXE_PROVIDER_PLUGIN",
     "provision": "PROVISION_PROVIDER_PLUGIN",
+    "auth": "AUTH_PROVIDER_PLUGIN",
 }
 
 
@@ -165,33 +170,42 @@ def get_software_versions_ipxe(project=None):
     return r
 
 
-@api.route("/update")
-@api.route("/update/status")
-def set_boot_status():
-    server_number = request.args.get("server_number")
-    if server_number is None:
-        abort(412)
-    boot_status = _validated_status(request.args.get("boot_status"), BootStatus)
-    return jsonify(_plugins().server_data.set_boot_status(server_number, boot_status))
+# --- Legacy mutation endpoints --------------------------------------------
+# These accepted GETs that mutated state, were unauthenticated, and accepted
+# parameters via query string. All three were moved to POST /v1/update/...
+# in this release. The legacy paths respond 405 Method Not Allowed with a
+# pointer at the new endpoint so existing callers fail loudly instead of
+# silently succeeding against an unauth'd surface.
 
 
-@api.route("/update/os")
-def set_boot_os():
-    server_number = request.args.get("server_number")
-    boot_os = request.args.get("boot_os")
-    if server_number is None or boot_os is None:
-        abort(412)
-    return jsonify(_plugins().server_data.set_boot_os(server_number, boot_os))
+def _legacy_405(new_path):
+    response = make_response(
+        jsonify(
+            {
+                "error": "Method Not Allowed",
+                "message": f"This endpoint moved to POST {new_path}",
+            }
+        ),
+        405,
+    )
+    response.headers["Allow"] = "POST"
+    return response
 
 
-@api.route("/update/opstatus")
-def set_operational_status():
-    log.info("Set Operational Status: %s", dict(request.args))
-    server_number = request.args.get("server_number")
-    if server_number is None:
-        abort(412)
-    operational_status = _validated_status(request.args.get("opstatus"), OperationalStatus)
-    return jsonify(_plugins().server_data.set_operational_status(server_number, operational_status))
+@api.route("/update", methods=["GET"])
+@api.route("/update/status", methods=["GET"])
+def legacy_set_boot_status_get():
+    return _legacy_405("/v1/update/status")
+
+
+@api.route("/update/os", methods=["GET"])
+def legacy_set_boot_os_get():
+    return _legacy_405("/v1/update/os")
+
+
+@api.route("/update/opstatus", methods=["GET"])
+def legacy_set_operational_status_get():
+    return _legacy_405("/v1/update/opstatus")
 
 
 @api.route("/provision/os/start")
@@ -213,6 +227,87 @@ def begin_os_provisioning():
     return p.provision.get_provision_script(server)
 
 
+# --- v1 mutation API ------------------------------------------------------
+# POST + JSON body, behind @requires_auth. Replaces the legacy /update/*
+# GET endpoints, which now return 405 (see above).
+
+v1 = Blueprint("v1", __name__, url_prefix="/v1")
+
+
+def _json_field(data, name):
+    """Pull a required field from a parsed JSON body or abort 400."""
+    value = data.get(name)
+    if value is None:
+        abort(400, description=f"Missing required field: {name}")
+    return value
+
+
+def _audit_context(field, server_number, new_value):
+    """Build before/after snapshots for the audit log."""
+    existing = _plugins().server_data.get_server_by_number(server_number)
+    return {
+        "before": {field: existing[field]} if existing else None,
+        "after": {field: new_value},
+    }
+
+
+@v1.route("/update/status", methods=["POST"])
+@requires_auth
+def v1_set_boot_status():
+    data = request.get_json(silent=True) or {}
+    server_number = _json_field(data, "server_number")
+    boot_status = _validated_status(data.get("boot_status"), BootStatus)
+    ctx = _audit_context("boot_status", server_number, boot_status)
+    result = _plugins().server_data.set_boot_status(server_number, boot_status)
+    audit.emit(
+        action="set_boot_status",
+        resource=f"server/{server_number}",
+        actor=g.get("actor"),
+        before=ctx["before"],
+        after=ctx["after"],
+        request_id=g.get("request_id"),
+    )
+    return jsonify(result)
+
+
+@v1.route("/update/os", methods=["POST"])
+@requires_auth
+def v1_set_boot_os():
+    data = request.get_json(silent=True) or {}
+    server_number = _json_field(data, "server_number")
+    boot_os = _json_field(data, "boot_os")
+    ctx = _audit_context("boot_os", server_number, boot_os)
+    result = _plugins().server_data.set_boot_os(server_number, boot_os)
+    audit.emit(
+        action="set_boot_os",
+        resource=f"server/{server_number}",
+        actor=g.get("actor"),
+        before=ctx["before"],
+        after=ctx["after"],
+        request_id=g.get("request_id"),
+    )
+    return jsonify(result)
+
+
+@v1.route("/update/opstatus", methods=["POST"])
+@requires_auth
+def v1_set_operational_status():
+    data = request.get_json(silent=True) or {}
+    server_number = _json_field(data, "server_number")
+    operational_status = _validated_status(data.get("opstatus"), OperationalStatus)
+    ctx = _audit_context("operational_status", server_number, operational_status)
+    result = _plugins().server_data.set_operational_status(server_number, operational_status)
+    audit.emit(
+        action="set_operational_status",
+        resource=f"server/{server_number}",
+        actor=g.get("actor"),
+        before=ctx["before"],
+        after=ctx["after"],
+        request_id=g.get("request_id"),
+    )
+    return jsonify(result)
+
+
 def create_app(config_overrides=None, plugins: Plugins | None = None) -> Flask:
     """Build a configured Flask app.
 
@@ -232,6 +327,13 @@ def create_app(config_overrides=None, plugins: Plugins | None = None) -> Flask:
     Bootstrap5(app)
     app.register_blueprint(frontend)
     app.register_blueprint(api)
+    app.register_blueprint(v1)
+
+    @app.before_request
+    def _assign_request_id():
+        # X-Request-ID from upstream (load balancer, proxy) wins so audit
+        # events can be correlated with infra logs; otherwise generate one.
+        g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
 
     if plugins is None:
         plugins = Plugins(

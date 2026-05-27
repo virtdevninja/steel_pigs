@@ -15,6 +15,7 @@ services:
     environment:
       STEEL_PIGS_SECRET_KEY: dev-secret-do-not-use-in-prod
       STEEL_PIGS_DATABASE_URL: sqlite:////data/inventory.db
+      STEEL_PIGS_API_TOKEN: dev-secret-do-not-use-in-prod
     volumes:
       - steel-pigs-data:/data
     restart: unless-stopped
