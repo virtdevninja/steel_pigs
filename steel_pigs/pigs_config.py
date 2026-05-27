@@ -70,3 +70,8 @@ PROVISION_PROVIDER_PLUGIN = {
     "namespace": "steel_pigs.plugins.providers.rpc_os_provision",
     "class": "RPCProvision",
 }
+
+AUTH_PROVIDER_PLUGIN = {
+    "namespace": "steel_pigs.plugins.providers.env_token_auth",
+    "class": "EnvTokenAuth",
+}

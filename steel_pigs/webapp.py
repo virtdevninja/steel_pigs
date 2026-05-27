@@ -43,6 +43,7 @@ class Plugins:
     formatter: Any
     pxe: Any
     provision: Any
+    auth: Any
 
 
 _PLUGIN_SPECS = {
@@ -51,6 +52,7 @@ _PLUGIN_SPECS = {
     "formatter": "FORMATTER_PROVIDER_PLUGIN",
     "pxe": "PXE_PROVIDER_PLUGIN",
     "provision": "PROVISION_PROVIDER_PLUGIN",
+    "auth": "AUTH_PROVIDER_PLUGIN",
 }
 
 
