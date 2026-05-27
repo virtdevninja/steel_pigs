@@ -39,14 +39,32 @@ from datetime import datetime, timezone
 logger = logging.getLogger("steel_pigs.audit")
 
 
+def _strip_control(value):
+    """Strip CR/LF from strings (recursing into dicts and lists).
+
+    ``json.dumps`` below already escapes embedded newlines, so the final
+    log line is single-line regardless. Stripping at the source is
+    defense-in-depth, makes the sanitizer pattern explicit to static
+    analysis (CWE-117 / py/log-injection), and protects callers that
+    might later swap json.dumps for a non-escaping serializer.
+    """
+    if isinstance(value, str):
+        return value.replace("\r", "").replace("\n", "")
+    if isinstance(value, dict):
+        return {k: _strip_control(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_strip_control(v) for v in value]
+    return value
+
+
 def emit(action, resource, *, actor=None, before=None, after=None, request_id=None):
     event = {
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
-        "actor": actor,
-        "action": action,
-        "resource": resource,
-        "before": before,
-        "after": after,
-        "request_id": request_id,
+        "actor": _strip_control(actor),
+        "action": _strip_control(action),
+        "resource": _strip_control(resource),
+        "before": _strip_control(before),
+        "after": _strip_control(after),
+        "request_id": _strip_control(request_id),
     }
     logger.info(json.dumps(event, default=str))

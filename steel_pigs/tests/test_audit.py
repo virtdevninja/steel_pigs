@@ -131,6 +131,50 @@ class TestAuditLog(unittest.TestCase):
         )
         self.assertEqual(self.capture.events[0]["request_id"], "rid-from-upstream-7")
 
+    # --- log-injection defense --------------------------------------------
+
+    def test_newline_in_body_value_is_stripped(self):
+        # CWE-117: a value containing CR/LF could be used to forge log
+        # entries if it landed verbatim in the output. Inject via the
+        # JSON body (Werkzeug refuses CR/LF in headers, so the HTTP layer
+        # already blocks that vector). Verify audit._strip_control
+        # strips them from the after-state we record.
+        self.client.post(
+            "/v1/update/os",
+            json={"server_number": 555121, "boot_os": "Fedora\r\nFORGED ENTRY"},
+            headers={"Authorization": f"Bearer {API_TOKEN}"},
+        )
+        recorded = self.capture.events[0]["after"]["boot_os"]
+        self.assertNotIn("\n", recorded)
+        self.assertNotIn("\r", recorded)
+        self.assertEqual(recorded, "FedoraFORGED ENTRY")
+
+
+class TestStripControl(unittest.TestCase):
+    """Direct coverage of audit._strip_control."""
+
+    def test_strips_newlines_in_string(self):
+        from steel_pigs.audit import _strip_control
+
+        self.assertEqual(_strip_control("a\nb\rc"), "abc")
+
+    def test_recurses_into_dicts(self):
+        from steel_pigs.audit import _strip_control
+
+        self.assertEqual(_strip_control({"k": "a\nb"}), {"k": "ab"})
+
+    def test_recurses_into_lists(self):
+        from steel_pigs.audit import _strip_control
+
+        self.assertEqual(_strip_control(["a\nb", "c"]), ["ab", "c"])
+
+    def test_passes_through_non_strings(self):
+        from steel_pigs.audit import _strip_control
+
+        self.assertIsNone(_strip_control(None))
+        self.assertEqual(_strip_control(42), 42)
+        self.assertEqual(_strip_control(True), True)
+
 
 if __name__ == "__main__":
     unittest.main()
