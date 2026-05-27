@@ -1,0 +1,16 @@
+# CodeQL configuration.
+#
+# Referenced by .github/workflows/codeql.yml. `queries` and `languages`
+# are still set on the workflow's init step; this file only adds
+# scan-path exclusions and other repo-specific tuning.
+
+paths-ignore:
+  # Alembic-generated migration files. Every new revision file declares
+  # four module-level globals (`revision`, `down_revision`,
+  # `branch_labels`, `depends_on`) that Alembic reads via module
+  # introspection. CodeQL can't see the introspection and flags them as
+  # unused, so the py/unused-global-variable rule fires on every new
+  # migration. The files are generated from steel_pigs/alembic/script.py.mako
+  # and are reviewed by hand at creation time -- safer to skip the scan
+  # than to add per-line suppressions to every future migration.
+  - "steel_pigs/alembic/versions/**"
