@@ -81,13 +81,15 @@ class TestFlaskApp(unittest.TestCase):
         self.assertIn(b"set latest_version 4", rv.data)
 
     def test_hardware_log_repr_escapes_newline_in_query_arg(self):
-        # CWE-117 defense: the route logs dict(request.args) with %r, so
-        # a URL-encoded newline lands as the two-character escape `\n`
-        # in the captured log message instead of a real newline that
-        # could forge a second log line.
+        # CWE-117 defense: the route logs dict(request.args) via
+        # _log_safe, so a URL-encoded newline lands as the
+        # two-character escape `\n` in the captured log message instead
+        # of a real newline that could forge a second log line.
         handler = _RecordingHandler()
         logger = logging.getLogger("steel_pigs.webapp")
+        previous_level = logger.level
         logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
         try:
             rv = self.client.get("/hardware?manufacturer=Dell&product=r810%0AFORGED")
             self.assertEqual(rv.status_code, 200)
@@ -100,6 +102,7 @@ class TestFlaskApp(unittest.TestCase):
             self.assertIn("\\n", msg)
         finally:
             logger.removeHandler(handler)
+            logger.setLevel(previous_level)
 
 
 class TestLegacyMutationRoutes(unittest.TestCase):

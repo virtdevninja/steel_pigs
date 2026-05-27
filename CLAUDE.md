@@ -37,7 +37,7 @@ ruff check . && ruff format .   # if you want to skip pre-commit and just run ru
 ## Environment variables
 
 * `STEEL_PIGS_SECRET_KEY` — Flask session / CSRF key. **Set in production.** If unset, `pigs_config.py` generates a random key at import time and logs a warning; sessions and CSRF tokens won't survive a restart.
-* `STEEL_PIGS_DATABASE_URL` — SQLAlchemy URL for the bundled `SQL` inventory plugin. Defaults to `sqlite:///:memory:`.
+* `STEEL_PIGS_DATABASE_URL` — SQLAlchemy URL for the bundled `SQL` inventory plugin. Defaults to `sqlite:///steel_pigs.db`. `:memory:` logs a warning at startup (tests opt back into it via `steel_pigs/tests/conftest.py`).
 
 Plugin *selection* (which class to load per role) stays code-level in `pigs_config.py`; only secrets / per-deployment values come from env.
 
@@ -72,6 +72,8 @@ Bundled default plugins live in `steel_pigs/plugins/providers/` and are demo-gra
 `plugins/providers/sql.py` uses SQLAlchemy 2.0 idioms: `DeclarativeBase`, `Mapped[T]` + `mapped_column()`, `select().where()` + `session.execute().scalar_one_or_none()`. `_session_scope()` is a context manager that commits on success and rolls back on exception. The session factory is built once in `__init__` with `expire_on_commit=False` so attributes remain accessible after commit but before the session closes.
 
 `set_boot_os` returns the failure key `set_boot_os` while success uses `os_set` — this asymmetry is preserved for backwards compat with the original API (other setters use `status_set` for both).
+
+Schema is managed by Alembic. `SQL.__init__` calls `alembic upgrade head` via `steel_pigs.db.make_alembic_config(engine=self.engine)` — passing the engine through `config.attributes` so migrations share the connection (matters for `:memory:`). Migration files live in `steel_pigs/alembic/versions/`; `steel_pigs/alembic.ini` is the Alembic config; `steel_pigs/db.py` is both the Config factory and the `python -m steel_pigs.db ...` CLI. For non-SQLite backends multiple workers can race on first-time `upgrade`; deploy via `python -m steel_pigs.db upgrade` as a pre-deploy step.
 
 ### Templates
 

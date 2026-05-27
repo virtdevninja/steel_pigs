@@ -22,6 +22,7 @@ dependencies = [
     "flask-wtf>=1.2",
     "wtforms>=3.1",
     "sqlalchemy>=2.0",
+    "alembic>=1.13",
 ]
 
 [project.optional-dependencies]
@@ -37,11 +38,22 @@ include = ["steel_pigs*"]
 exclude = ["steel_pigs.tests*"]
 
 [tool.setuptools.package-data]
-steel_pigs = ["templates/*", "templates/**/*"]
+steel_pigs = [
+    "templates/*",
+    "templates/**/*",
+    "alembic.ini",
+    "alembic/*",
+    "alembic/**/*",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Auto-generated Alembic migration files: Alembic produces them with its
+# own conventions (single quotes, particular argument layout). We don't
+# want ruff fighting the template on every new revision; the files are
+# reviewed by hand at creation time.
+extend-exclude = ["steel_pigs/alembic/versions"]
 
 [tool.ruff.lint]
 select = [

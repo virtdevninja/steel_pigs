@@ -15,6 +15,7 @@
 import logging
 from contextlib import contextmanager
 
+from alembic import command
 from sqlalchemy import ForeignKey, String, create_engine, select
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -23,6 +24,8 @@ from sqlalchemy.orm import (
     relationship,
     sessionmaker,
 )
+
+from steel_pigs.db import make_alembic_config
 
 from .pluginbase import ProviderPluginBase
 
@@ -100,7 +103,12 @@ class SQL(ProviderPluginBase):
     def __init__(self, config):
         self.engine = create_engine(config["engine"], echo=False)
         self._session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
-        Base.metadata.create_all(self.engine)
+        # Auto-upgrade the schema. Safe for the default SQLite backend
+        # (the file lock serializes worker startup). For Postgres/MySQL,
+        # multiple workers can race -- see README on running
+        # `python -m steel_pigs.db upgrade` as a pre-deploy step instead.
+        alembic_cfg = make_alembic_config(engine=self.engine)
+        command.upgrade(alembic_cfg, "head")
 
     @contextmanager
     def _session_scope(self):
