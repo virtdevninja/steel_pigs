@@ -66,7 +66,9 @@ Configuration is driven by environment variables:
   production. If unset, a random key is generated at import time and a
   warning is logged.
 * ``STEEL_PIGS_DATABASE_URL`` -- SQLAlchemy URL for the bundled ``SQL``
-  inventory plugin. Defaults to ``sqlite:///:memory:``.
+  inventory plugin. Defaults to ``sqlite:///steel_pigs.db`` (a file in
+  CWD). Pointing at ``:memory:`` logs a startup warning -- it's the
+  right call for tests but almost always wrong elsewhere.
 * ``STEEL_PIGS_API_TOKEN`` -- bearer token expected on the mutation
   endpoints (``POST /v1/update/*``). The bundled ``EnvTokenAuth`` plugin
   rejects every request if this is unset. Swap to a different auth
@@ -82,6 +84,33 @@ with your favourite WSGI server. With gunicorn ::
     gunicorn steel_pigs.webapp:app
 
 Then put nginx (or Apache HTTPD with mod_wsgi) in front of it.
+
+
+Database migrations
+===================
+The bundled ``SQL`` inventory plugin manages schema with Alembic. On
+startup, the plugin runs ``alembic upgrade head`` against the configured
+database. For the default SQLite backend the file lock serializes
+worker startup, so multi-worker gunicorn processes are safe.
+
+For Postgres / MySQL deployments, the workers can race on first
+migration. Run migrations as a pre-deploy step instead ::
+
+    python -m steel_pigs.db upgrade
+
+The CLI wraps the most-used Alembic subcommands. ``--url`` overrides
+``$STEEL_PIGS_DATABASE_URL`` overrides ``alembic.ini`` ::
+
+    python -m steel_pigs.db current                # current revision
+    python -m steel_pigs.db upgrade head           # apply all pending
+    python -m steel_pigs.db downgrade -1           # back out the last
+    python -m steel_pigs.db revision -m "..."      # create empty revision
+    python -m steel_pigs.db revision -m "..." --autogenerate  # diff models vs DB
+    python -m steel_pigs.db stamp head             # mark DB at head w/o running
+    python -m steel_pigs.db history                # show all revisions
+
+After editing the ORM models, generate a new migration with
+``--autogenerate`` and review the resulting file before committing.
 
 
 Contributing

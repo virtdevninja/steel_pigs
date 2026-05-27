@@ -45,10 +45,26 @@ def _resolve_secret_key():
 
 SECRET_KEY = _resolve_secret_key()
 
+
+def _resolve_database_url():
+    url = os.environ.get("STEEL_PIGS_DATABASE_URL", "sqlite:///steel_pigs.db")
+    if ":memory:" in url:
+        # Tests legitimately want in-memory; production almost never does.
+        # The string match catches both sqlite:///:memory: and the
+        # file::memory: shared-cache form.
+        log.warning(
+            "STEEL_PIGS_DATABASE_URL points at an in-memory SQLite database "
+            "(%s); inventory will not survive a restart. Set the env var to a "
+            "persistent URL for non-test deployments.",
+            url,
+        )
+    return url
+
+
 PROVIDER_PLUGIN = {
     "namespace": "steel_pigs.plugins.providers.sql",
     "class": "SQL",
-    "engine": os.environ.get("STEEL_PIGS_DATABASE_URL", "sqlite:///:memory:"),
+    "engine": _resolve_database_url(),
 }
 
 VERSION_PROVIDER_PLUGIN = {
