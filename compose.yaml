@@ -1,0 +1,23 @@
+# Local development / smoke-test compose file.
+# Boot with: docker compose up --build
+# Then: curl http://localhost:8000/healthz
+#
+# This compose file is NOT a production deployment template. The secret
+# key is hardcoded for convenience; rotate it (or move to a real secrets
+# store) before pointing real traffic at the service.
+
+services:
+  steel-pigs:
+    build: .
+    image: steel-pigs:dev
+    ports:
+      - "8000:8000"
+    environment:
+      STEEL_PIGS_SECRET_KEY: dev-secret-do-not-use-in-prod
+      STEEL_PIGS_DATABASE_URL: sqlite:////data/inventory.db
+    volumes:
+      - steel-pigs-data:/data
+    restart: unless-stopped
+
+volumes:
+  steel-pigs-data:
