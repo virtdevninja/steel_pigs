@@ -16,9 +16,43 @@ install from source ::
     cd steel_pigs
     pip install -e .
 
-For development, install the optional ``dev`` extras (pytest + ruff) ::
+For development, install the optional ``dev`` extras (pytest + ruff +
+pre-commit) ::
 
     pip install -e ".[dev]"
+
+
+Running with Docker
+===================
+A multi-stage ``Dockerfile`` and a ``compose.yaml`` ship in the repo. The
+compose file is a dev smoke-test (hard-coded secret, named volume for the
+sqlite DB) -- not a production deployment template.
+
+Build and run the stack ::
+
+    docker compose up --build
+
+Then probe the health endpoints ::
+
+    curl http://localhost:8000/healthz
+    curl http://localhost:8000/readyz
+
+Hit a mutation endpoint with the dev token configured in ``compose.yaml`` ::
+
+    curl -X POST http://localhost:8000/v1/update/status \
+         -H "Authorization: Bearer dev-secret-do-not-use-in-prod" \
+         -H "Content-Type: application/json" \
+         -d '{"server_number": 555121, "boot_status": "online"}'
+
+The image honours these env vars at runtime:
+
+* ``STEEL_PIGS_SECRET_KEY``, ``STEEL_PIGS_DATABASE_URL``,
+  ``STEEL_PIGS_API_TOKEN`` -- see *Getting Started* below.
+* ``GUNICORN_WORKERS`` -- worker count, default ``2``.
+* ``GUNICORN_BIND`` -- bind address, default ``0.0.0.0:8000``.
+
+For real deployments, override every secret env var and run a separate
+container per replica behind a load balancer.
 
 
 Getting Started
@@ -33,6 +67,11 @@ Configuration is driven by environment variables:
   warning is logged.
 * ``STEEL_PIGS_DATABASE_URL`` -- SQLAlchemy URL for the bundled ``SQL``
   inventory plugin. Defaults to ``sqlite:///:memory:``.
+* ``STEEL_PIGS_API_TOKEN`` -- bearer token expected on the mutation
+  endpoints (``POST /v1/update/*``). The bundled ``EnvTokenAuth`` plugin
+  rejects every request if this is unset. Swap to a different auth
+  plugin (LDAP, OIDC, ...) by editing ``AUTH_PROVIDER_PLUGIN`` in
+  ``pigs_config.py``.
 
 Plugin selection lives in ``steel_pigs/pigs_config.py``; swap the dicts to
 point at your own plugins.
