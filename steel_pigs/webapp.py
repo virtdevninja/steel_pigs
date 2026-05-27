@@ -30,6 +30,7 @@ from flask import (
 from flask_bootstrap import Bootstrap5
 
 from . import pigs_config
+from .auth import requires_auth
 from .pigs_app_settings.frontend import frontend
 from .states import BootStatus, OperationalStatus
 
@@ -167,33 +168,42 @@ def get_software_versions_ipxe(project=None):
     return r
 
 
-@api.route("/update")
-@api.route("/update/status")
-def set_boot_status():
-    server_number = request.args.get("server_number")
-    if server_number is None:
-        abort(412)
-    boot_status = _validated_status(request.args.get("boot_status"), BootStatus)
-    return jsonify(_plugins().server_data.set_boot_status(server_number, boot_status))
+# --- Legacy mutation endpoints --------------------------------------------
+# These accepted GETs that mutated state, were unauthenticated, and accepted
+# parameters via query string. All three were moved to POST /v1/update/...
+# in this release. The legacy paths respond 405 Method Not Allowed with a
+# pointer at the new endpoint so existing callers fail loudly instead of
+# silently succeeding against an unauth'd surface.
 
 
-@api.route("/update/os")
-def set_boot_os():
-    server_number = request.args.get("server_number")
-    boot_os = request.args.get("boot_os")
-    if server_number is None or boot_os is None:
-        abort(412)
-    return jsonify(_plugins().server_data.set_boot_os(server_number, boot_os))
+def _legacy_405(new_path):
+    response = make_response(
+        jsonify(
+            {
+                "error": "Method Not Allowed",
+                "message": f"This endpoint moved to POST {new_path}",
+            }
+        ),
+        405,
+    )
+    response.headers["Allow"] = "POST"
+    return response
 
 
-@api.route("/update/opstatus")
-def set_operational_status():
-    log.info("Set Operational Status: %s", dict(request.args))
-    server_number = request.args.get("server_number")
-    if server_number is None:
-        abort(412)
-    operational_status = _validated_status(request.args.get("opstatus"), OperationalStatus)
-    return jsonify(_plugins().server_data.set_operational_status(server_number, operational_status))
+@api.route("/update", methods=["GET"])
+@api.route("/update/status", methods=["GET"])
+def legacy_set_boot_status_get():
+    return _legacy_405("/v1/update/status")
+
+
+@api.route("/update/os", methods=["GET"])
+def legacy_set_boot_os_get():
+    return _legacy_405("/v1/update/os")
+
+
+@api.route("/update/opstatus", methods=["GET"])
+def legacy_set_operational_status_get():
+    return _legacy_405("/v1/update/opstatus")
 
 
 @api.route("/provision/os/start")
@@ -215,6 +225,49 @@ def begin_os_provisioning():
     return p.provision.get_provision_script(server)
 
 
+# --- v1 mutation API ------------------------------------------------------
+# POST + JSON body, behind @requires_auth. Replaces the legacy /update/*
+# GET endpoints, which now return 405 (see above).
+
+v1 = Blueprint("v1", __name__, url_prefix="/v1")
+
+
+def _json_field(data, name):
+    """Pull a required field from a parsed JSON body or abort 400."""
+    value = data.get(name)
+    if value is None:
+        abort(400, description=f"Missing required field: {name}")
+    return value
+
+
+@v1.route("/update/status", methods=["POST"])
+@requires_auth
+def v1_set_boot_status():
+    data = request.get_json(silent=True) or {}
+    server_number = _json_field(data, "server_number")
+    boot_status = _validated_status(data.get("boot_status"), BootStatus)
+    return jsonify(_plugins().server_data.set_boot_status(server_number, boot_status))
+
+
+@v1.route("/update/os", methods=["POST"])
+@requires_auth
+def v1_set_boot_os():
+    data = request.get_json(silent=True) or {}
+    server_number = _json_field(data, "server_number")
+    boot_os = _json_field(data, "boot_os")
+    return jsonify(_plugins().server_data.set_boot_os(server_number, boot_os))
+
+
+@v1.route("/update/opstatus", methods=["POST"])
+@requires_auth
+def v1_set_operational_status():
+    log.info("Set Operational Status: %s", request.get_json(silent=True))
+    data = request.get_json(silent=True) or {}
+    server_number = _json_field(data, "server_number")
+    operational_status = _validated_status(data.get("opstatus"), OperationalStatus)
+    return jsonify(_plugins().server_data.set_operational_status(server_number, operational_status))
+
+
 def create_app(config_overrides=None, plugins: Plugins | None = None) -> Flask:
     """Build a configured Flask app.
 
@@ -234,6 +287,7 @@ def create_app(config_overrides=None, plugins: Plugins | None = None) -> Flask:
     Bootstrap5(app)
     app.register_blueprint(frontend)
     app.register_blueprint(api)
+    app.register_blueprint(v1)
 
     if plugins is None:
         plugins = Plugins(
