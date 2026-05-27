@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+build/
+dist/
+
+# Repo docs and tooling that don't belong in the image
+CLAUDE.md
+GAPS.md
+.pre-commit-config.yaml

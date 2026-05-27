@@ -28,6 +28,16 @@ class TestFlaskApp(unittest.TestCase):
     def setUp(self):
         self.client = self.app.test_client()
 
+    def test_healthz(self):
+        rv = self.client.get("/healthz")
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(rv.get_json(), {"status": "ok"})
+
+    def test_readyz_when_plugins_loaded(self):
+        rv = self.client.get("/readyz")
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(rv.get_json(), {"status": "ok"})
+
     def test_hardware_fails_with_412_when_missing_prop(self):
         rv = self.client.get("/hardware")
         self.assertEqual(rv.status_code, 412)
@@ -70,6 +80,19 @@ class TestFlaskApp(unittest.TestCase):
         self.assertEqual(rv.content_type, "application/json")
         data = json.loads(rv.data)
         self.assertEqual(data["operation"], "success")
+
+    def test_update_boot_status_rejects_unknown_value(self):
+        rv = self.client.get("/update/status?server_number=555121&boot_status=garbage")
+        self.assertEqual(rv.status_code, 400)
+
+    def test_update_boot_status_normalises_case(self):
+        rv = self.client.get("/update/status?server_number=555121&boot_status=ONLINE")
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(json.loads(rv.data)["status_set"], "online")
+
+    def test_set_operational_status_rejects_unknown_value(self):
+        rv = self.client.get("/update/opstatus?server_number=555121&opstatus=garbage")
+        self.assertEqual(rv.status_code, 400)
 
     def test_get_versions_ipxe(self):
         rv = self.client.get("/versions/ipxe")

@@ -70,6 +70,3 @@ PROVISION_PROVIDER_PLUGIN = {
     "namespace": "steel_pigs.plugins.providers.rpc_os_provision",
     "class": "RPCProvision",
 }
-
-ONLINE_COMPLETE_STATUS = "online"
-PROVISION_STATUS = "provision"
