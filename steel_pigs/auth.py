@@ -25,6 +25,8 @@ from functools import wraps
 
 from flask import current_app, g, jsonify, make_response, request
 
+from . import audit
+
 
 def _unauthorized():
     response = make_response(jsonify({"error": "Unauthorized"}), 401)
@@ -38,6 +40,12 @@ def requires_auth(view):
         plugins = current_app.extensions["steel_pigs"]
         actor = plugins.auth.authenticate(request)
         if actor is None:
+            audit.emit(
+                action="auth_failed",
+                resource=request.path,
+                actor=None,
+                request_id=g.get("request_id"),
+            )
             return _unauthorized()
         g.actor = actor
         return view(*args, **kwargs)

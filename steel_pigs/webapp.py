@@ -13,6 +13,7 @@
 #   limitations under the License.
 
 import logging
+import uuid
 from dataclasses import dataclass
 from importlib import import_module
 from typing import Any
@@ -22,6 +23,7 @@ from flask import (
     Flask,
     abort,
     current_app,
+    g,
     jsonify,
     make_response,
     render_template,
@@ -29,7 +31,7 @@ from flask import (
 )
 from flask_bootstrap import Bootstrap5
 
-from . import pigs_config
+from . import audit, pigs_config
 from .auth import requires_auth
 from .pigs_app_settings.frontend import frontend
 from .states import BootStatus, OperationalStatus
@@ -240,13 +242,32 @@ def _json_field(data, name):
     return value
 
 
+def _audit_context(field, server_number, new_value):
+    """Build before/after snapshots for the audit log."""
+    existing = _plugins().server_data.get_server_by_number(server_number)
+    return {
+        "before": {field: existing[field]} if existing else None,
+        "after": {field: new_value},
+    }
+
+
 @v1.route("/update/status", methods=["POST"])
 @requires_auth
 def v1_set_boot_status():
     data = request.get_json(silent=True) or {}
     server_number = _json_field(data, "server_number")
     boot_status = _validated_status(data.get("boot_status"), BootStatus)
-    return jsonify(_plugins().server_data.set_boot_status(server_number, boot_status))
+    ctx = _audit_context("boot_status", server_number, boot_status)
+    result = _plugins().server_data.set_boot_status(server_number, boot_status)
+    audit.emit(
+        action="set_boot_status",
+        resource=f"server/{server_number}",
+        actor=g.get("actor"),
+        before=ctx["before"],
+        after=ctx["after"],
+        request_id=g.get("request_id"),
+    )
+    return jsonify(result)
 
 
 @v1.route("/update/os", methods=["POST"])
@@ -255,17 +276,36 @@ def v1_set_boot_os():
     data = request.get_json(silent=True) or {}
     server_number = _json_field(data, "server_number")
     boot_os = _json_field(data, "boot_os")
-    return jsonify(_plugins().server_data.set_boot_os(server_number, boot_os))
+    ctx = _audit_context("boot_os", server_number, boot_os)
+    result = _plugins().server_data.set_boot_os(server_number, boot_os)
+    audit.emit(
+        action="set_boot_os",
+        resource=f"server/{server_number}",
+        actor=g.get("actor"),
+        before=ctx["before"],
+        after=ctx["after"],
+        request_id=g.get("request_id"),
+    )
+    return jsonify(result)
 
 
 @v1.route("/update/opstatus", methods=["POST"])
 @requires_auth
 def v1_set_operational_status():
-    log.info("Set Operational Status: %s", request.get_json(silent=True))
     data = request.get_json(silent=True) or {}
     server_number = _json_field(data, "server_number")
     operational_status = _validated_status(data.get("opstatus"), OperationalStatus)
-    return jsonify(_plugins().server_data.set_operational_status(server_number, operational_status))
+    ctx = _audit_context("operational_status", server_number, operational_status)
+    result = _plugins().server_data.set_operational_status(server_number, operational_status)
+    audit.emit(
+        action="set_operational_status",
+        resource=f"server/{server_number}",
+        actor=g.get("actor"),
+        before=ctx["before"],
+        after=ctx["after"],
+        request_id=g.get("request_id"),
+    )
+    return jsonify(result)
 
 
 def create_app(config_overrides=None, plugins: Plugins | None = None) -> Flask:
@@ -288,6 +328,12 @@ def create_app(config_overrides=None, plugins: Plugins | None = None) -> Flask:
     app.register_blueprint(frontend)
     app.register_blueprint(api)
     app.register_blueprint(v1)
+
+    @app.before_request
+    def _assign_request_id():
+        # X-Request-ID from upstream (load balancer, proxy) wins so audit
+        # events can be correlated with infra logs; otherwise generate one.
+        g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
 
     if plugins is None:
         plugins = Plugins(
