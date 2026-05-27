@@ -31,6 +31,7 @@ from flask_bootstrap import Bootstrap5
 
 from . import pigs_config
 from .pigs_app_settings.frontend import frontend
+from .states import BootStatus, OperationalStatus
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +63,22 @@ def _load_plugin(spec):
 
 def _plugins() -> Plugins:
     return current_app.extensions["steel_pigs"]
+
+
+def _validated_status(value, enum_cls):
+    """Lowercase + validate ``value`` against ``enum_cls``.
+
+    Returns the canonical enum string value on success. Aborts with 412
+    if the param is missing, 400 if it is not a known status.
+    """
+    if value is None:
+        abort(412)
+    normalized = value.lower()
+    try:
+        return enum_cls(normalized).value
+    except ValueError:
+        allowed = ", ".join(m.value for m in enum_cls)
+        abort(400, description=f"Invalid status {value!r}. Allowed: {allowed}")
 
 
 api = Blueprint("api", __name__)
@@ -152,9 +169,9 @@ def get_software_versions_ipxe(project=None):
 @api.route("/update/status")
 def set_boot_status():
     server_number = request.args.get("server_number")
-    boot_status = request.args.get("boot_status")
-    if server_number is None or boot_status is None:
+    if server_number is None:
         abort(412)
+    boot_status = _validated_status(request.args.get("boot_status"), BootStatus)
     return jsonify(_plugins().server_data.set_boot_status(server_number, boot_status))
 
 
@@ -171,9 +188,9 @@ def set_boot_os():
 def set_operational_status():
     log.info("Set Operational Status: %s", dict(request.args))
     server_number = request.args.get("server_number")
-    operational_status = request.args.get("opstatus")
-    if server_number is None or operational_status is None:
+    if server_number is None:
         abort(412)
+    operational_status = _validated_status(request.args.get("opstatus"), OperationalStatus)
     return jsonify(_plugins().server_data.set_operational_status(server_number, operational_status))
 
 
@@ -189,9 +206,9 @@ def begin_os_provisioning():
     if server is None:
         abort(404, description=f"Server not found using {server_mac}")
     op_status = str(server["operational_status"]).lower()
-    if op_status == pigs_config.ONLINE_COMPLETE_STATUS.lower():
+    if op_status == OperationalStatus.ONLINE.value:
         return "", 204
-    if op_status != pigs_config.PROVISION_STATUS.lower():
+    if op_status != OperationalStatus.PROVISION.value:
         return "", 204
     return p.provision.get_provision_script(server)
 

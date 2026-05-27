@@ -81,6 +81,19 @@ class TestFlaskApp(unittest.TestCase):
         data = json.loads(rv.data)
         self.assertEqual(data["operation"], "success")
 
+    def test_update_boot_status_rejects_unknown_value(self):
+        rv = self.client.get("/update/status?server_number=555121&boot_status=garbage")
+        self.assertEqual(rv.status_code, 400)
+
+    def test_update_boot_status_normalises_case(self):
+        rv = self.client.get("/update/status?server_number=555121&boot_status=ONLINE")
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(json.loads(rv.data)["status_set"], "online")
+
+    def test_set_operational_status_rejects_unknown_value(self):
+        rv = self.client.get("/update/opstatus?server_number=555121&opstatus=garbage")
+        self.assertEqual(rv.status_code, 400)
+
     def test_get_versions_ipxe(self):
         rv = self.client.get("/versions/ipxe")
         self.assertEqual(rv.status_code, 200)
