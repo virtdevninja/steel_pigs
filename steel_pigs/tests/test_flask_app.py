@@ -13,6 +13,7 @@
 #   limitations under the License.
 
 import json
+import logging
 import os
 import unittest
 from unittest.mock import patch
@@ -21,6 +22,17 @@ from steel_pigs.tests import seed_sql_plugin
 from steel_pigs.webapp import create_app
 
 API_TOKEN = "test-token-12345"
+
+
+class _RecordingHandler(logging.Handler):
+    """Collect every log record reaching this handler."""
+
+    def __init__(self):
+        super().__init__()
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(record)
 
 
 class TestFlaskApp(unittest.TestCase):
@@ -67,6 +79,27 @@ class TestFlaskApp(unittest.TestCase):
         rv = self.client.get("/versions/ipxe")
         self.assertEqual(rv.status_code, 200)
         self.assertIn(b"set latest_version 4", rv.data)
+
+    def test_hardware_log_repr_escapes_newline_in_query_arg(self):
+        # CWE-117 defense: the route logs dict(request.args) with %r, so
+        # a URL-encoded newline lands as the two-character escape `\n`
+        # in the captured log message instead of a real newline that
+        # could forge a second log line.
+        handler = _RecordingHandler()
+        logger = logging.getLogger("steel_pigs.webapp")
+        logger.addHandler(handler)
+        try:
+            rv = self.client.get("/hardware?manufacturer=Dell&product=r810%0AFORGED")
+            self.assertEqual(rv.status_code, 200)
+            hw_msgs = [
+                r.getMessage() for r in handler.records if "Request to /hardware" in r.getMessage()
+            ]
+            self.assertEqual(len(hw_msgs), 1)
+            msg = hw_msgs[0]
+            self.assertNotIn("\n", msg)
+            self.assertIn("\\n", msg)
+        finally:
+            logger.removeHandler(handler)
 
 
 class TestLegacyMutationRoutes(unittest.TestCase):
