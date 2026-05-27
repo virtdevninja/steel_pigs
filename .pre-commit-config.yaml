@@ -1,6 +1,14 @@
 # Pre-commit hooks. After cloning, run once: pre-commit install
 # CI runs `pre-commit run --all-files`, so what you see locally is what CI checks.
 
+# Auto-generated Alembic migration files are excluded across all hooks.
+# Alembic's script.py.mako emits a trailing space on "Revises: " for the
+# baseline migration (no down_revision), trailing-whitespace would fix it
+# every CI run. Reviewed by hand at creation time. ruff has its own
+# exclude in pyproject.toml so direct `ruff check` invocations skip them
+# too.
+exclude: ^steel_pigs/alembic/versions/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
