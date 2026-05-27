@@ -49,6 +49,11 @@ steel_pigs = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Auto-generated Alembic migration files: Alembic produces them with its
+# own conventions (single quotes, particular argument layout). We don't
+# want ruff fighting the template on every new revision; the files are
+# reviewed by hand at creation time.
+extend-exclude = ["steel_pigs/alembic/versions"]
 
 [tool.ruff.lint]
 select = [
