@@ -28,6 +28,16 @@ class TestFlaskApp(unittest.TestCase):
     def setUp(self):
         self.client = self.app.test_client()
 
+    def test_healthz(self):
+        rv = self.client.get("/healthz")
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(rv.get_json(), {"status": "ok"})
+
+    def test_readyz_when_plugins_loaded(self):
+        rv = self.client.get("/readyz")
+        self.assertEqual(rv.status_code, 200)
+        self.assertEqual(rv.get_json(), {"status": "ok"})
+
     def test_hardware_fails_with_412_when_missing_prop(self):
         rv = self.client.get("/hardware")
         self.assertEqual(rv.status_code, 412)

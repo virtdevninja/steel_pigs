@@ -67,6 +67,25 @@ def _plugins() -> Plugins:
 api = Blueprint("api", __name__)
 
 
+@api.route("/healthz")
+def healthz():
+    """Liveness: the WSGI process is alive and serving."""
+    return {"status": "ok"}, 200
+
+
+@api.route("/readyz")
+def readyz():
+    """Readiness: app booted, all plugins loaded.
+
+    The plugin contract has no healthcheck method yet, so this only
+    proves the dataclass exists. Once plugins grow a ``healthcheck()``
+    method we can call into each here.
+    """
+    if current_app.extensions.get("steel_pigs") is None:
+        return {"status": "not_ready", "reason": "plugins not initialized"}, 503
+    return {"status": "ok"}, 200
+
+
 @api.route("/pxe")
 @api.route("/pxe/configs/<config_file>")
 def get_pxe_script(config_file=None):
