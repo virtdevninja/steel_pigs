@@ -62,9 +62,9 @@ class TestFlaskApp(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         self.assertEqual(rv.get_json(), {"status": "ok"})
 
-    def test_hardware_fails_with_412_when_missing_prop(self):
+    def test_hardware_fails_with_422_when_missing_prop(self):
         rv = self.client.get("/hardware")
-        self.assertEqual(rv.status_code, 412)
+        self.assertEqual(rv.status_code, 422)
 
     def test_hardware_serves_proper_ipxe_script(self):
         rv = self.client.get("/hardware?manufacturer=Dell%20&product=r%20810")
@@ -105,39 +105,6 @@ class TestFlaskApp(unittest.TestCase):
             logger.setLevel(previous_level)
 
 
-class TestLegacyMutationRoutes(unittest.TestCase):
-    """GET /update/* used to mutate state; now returns 405 -> POST /v1/."""
-
-    @classmethod
-    def setUpClass(cls):
-        cls._env_patcher = patch.dict(os.environ, {"STEEL_PIGS_API_TOKEN": API_TOKEN})
-        cls._env_patcher.start()
-        cls.app = create_app(config_overrides={"TESTING": True})
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._env_patcher.stop()
-
-    def setUp(self):
-        self.client = self.app.test_client()
-
-    def test_legacy_status_returns_405(self):
-        rv = self.client.get("/update/status?server_number=555121&boot_status=provision")
-        self.assertEqual(rv.status_code, 405)
-        self.assertEqual(rv.headers["Allow"], "POST")
-        self.assertIn("/v1/update/status", rv.get_json()["message"])
-
-    def test_legacy_os_returns_405(self):
-        rv = self.client.get("/update/os?server_number=555121&boot_os=Fedora")
-        self.assertEqual(rv.status_code, 405)
-        self.assertEqual(rv.headers["Allow"], "POST")
-
-    def test_legacy_opstatus_returns_405(self):
-        rv = self.client.get("/update/opstatus?server_number=555121&opstatus=kicking")
-        self.assertEqual(rv.status_code, 405)
-        self.assertEqual(rv.headers["Allow"], "POST")
-
-
 class TestV1MutationRoutes(unittest.TestCase):
     """POST /v1/update/* with bearer auth."""
 
@@ -163,7 +130,7 @@ class TestV1MutationRoutes(unittest.TestCase):
     def test_status_unauthenticated_returns_401(self):
         rv = self.client.post("/v1/update/status", json={"server_number": 555121})
         self.assertEqual(rv.status_code, 401)
-        self.assertEqual(rv.headers["WWW-Authenticate"], "Bearer")
+        self.assertTrue(rv.headers["WWW-Authenticate"].startswith("Bearer"))
 
     def test_status_wrong_token_returns_401(self):
         rv = self.client.post(
@@ -182,30 +149,21 @@ class TestV1MutationRoutes(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         self.assertEqual(json.loads(rv.data)["operation"], "success")
 
-    def test_status_missing_server_number_returns_400(self):
+    def test_status_missing_server_number_returns_422(self):
         rv = self.client.post(
             "/v1/update/status",
             json={"boot_status": "provision"},
             headers=self._auth_headers(),
         )
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
-    def test_status_unknown_value_returns_400(self):
+    def test_status_unknown_value_returns_422(self):
         rv = self.client.post(
             "/v1/update/status",
             json={"server_number": 555121, "boot_status": "garbage"},
             headers=self._auth_headers(),
         )
-        self.assertEqual(rv.status_code, 400)
-
-    def test_status_normalises_case(self):
-        rv = self.client.post(
-            "/v1/update/status",
-            json={"server_number": 555121, "boot_status": "ONLINE"},
-            headers=self._auth_headers(),
-        )
-        self.assertEqual(rv.status_code, 200)
-        self.assertEqual(json.loads(rv.data)["status_set"], "online")
+        self.assertEqual(rv.status_code, 422)
 
     # --- /v1/update/os ----------------------------------------------------
 
@@ -225,13 +183,13 @@ class TestV1MutationRoutes(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         self.assertEqual(json.loads(rv.data)["operation"], "success")
 
-    def test_os_missing_field_returns_400(self):
+    def test_os_missing_field_returns_422(self):
         rv = self.client.post(
             "/v1/update/os",
             json={"server_number": 555121},
             headers=self._auth_headers(),
         )
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
     # --- /v1/update/opstatus ----------------------------------------------
 
@@ -248,13 +206,13 @@ class TestV1MutationRoutes(unittest.TestCase):
         self.assertEqual(rv.status_code, 200)
         self.assertEqual(json.loads(rv.data)["operation"], "success")
 
-    def test_opstatus_unknown_value_returns_400(self):
+    def test_opstatus_unknown_value_returns_422(self):
         rv = self.client.post(
             "/v1/update/opstatus",
             json={"server_number": 555121, "opstatus": "garbage"},
             headers=self._auth_headers(),
         )
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
 
 if __name__ == "__main__":

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Steel PIGS is a Flask middleware that serves dynamically-generated iPXE boot scripts. Incoming PXE requests (by server number, MAC, or switch name/port) are resolved against a pluggable inventory backend, and responses are rendered from Jinja2 iPXE templates.
+Steel PIGS is an APIFlask service that serves dynamically-generated iPXE boot scripts. Incoming PXE requests (by server number, MAC, or switch name/port) are resolved against a pluggable inventory backend, and responses are rendered from Jinja2 iPXE templates.
 
-The project targets **Python 3.10+** and runs on Flask 3, SQLAlchemy 2 (`Mapped[]` + `select()`), bootstrap-flask (Bootstrap 5), flask-wtf 1.x, pytest, and ruff. Packaging is pyproject.toml (PEP 621); there is no `setup.py`, `requirements.txt`, or `MANIFEST.in`.
+The project targets **Python 3.10+** and runs on APIFlask 3 (Flask 3 underneath), SQLAlchemy 2 (`Mapped[]` + `select()`), bootstrap-flask (Bootstrap 5), flask-wtf 1.x, pytest, and ruff. Packaging is pyproject.toml (PEP 621); there is no `setup.py`, `requirements.txt`, or `MANIFEST.in`. The HTTP API is documented by the auto-generated OpenAPI 3 spec at `/openapi.json` with Swagger UI at `/docs`.
 
 The default branch is `main` (renamed from `master`); the old `development` branch was deleted as part of the modernization. PRs target `main`.
 

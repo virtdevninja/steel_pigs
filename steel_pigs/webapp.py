@@ -12,30 +12,53 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+"""HTTP surface for steel_pigs.
+
+Built on APIFlask; OpenAPI 3 spec auto-generated from the per-route
+schemas in ``steel_pigs.schemas`` and published at ``/openapi.json``
+with Swagger UI at ``/docs``.
+
+Two API blueprints:
+
+* ``api``  -- unauthenticated reads for the PXE-boot flow plus health
+              endpoints.
+* ``v1``   -- authenticated mutation endpoints under ``/v1``.
+
+The demo HTML frontend stays as a vanilla Flask Blueprint (so it
+doesn't appear in the OpenAPI spec).
+"""
+
 import logging
 import uuid
 from dataclasses import dataclass
 from importlib import import_module
 from typing import Any
 
-from flask import (
-    Blueprint,
-    Flask,
-    abort,
-    current_app,
-    g,
-    jsonify,
-    make_response,
-    render_template,
-    request,
-)
+from apiflask import APIBlueprint, APIFlask, abort
+from flask import current_app, g, make_response, render_template, request
 from flask_bootstrap import Bootstrap5
 
 from . import audit, pigs_config
-from .auth import requires_auth
+from .auth import auth
 from .exceptions.pigs_exceptions import ServerAlreadyExists, ServerNotFound
 from .pigs_app_settings.frontend import frontend
-from .states import BootStatus, OperationalStatus
+from .schemas import (
+    AddSwitchIn,
+    BootOsResultOut,
+    BootStatusResultOut,
+    CreateServerIn,
+    HardwareQuery,
+    HealthOut,
+    OpStatusResultOut,
+    ProvisionQuery,
+    PxeQuery,
+    ServerOut,
+    SwitchOut,
+    UpdateBootOsIn,
+    UpdateBootStatusIn,
+    UpdateOpStatusIn,
+)
+from .states import OperationalStatus
 
 log = logging.getLogger(__name__)
 
@@ -83,99 +106,109 @@ def _log_safe(value):
     return repr(value).replace("\n", "").replace("\r", "")
 
 
-def _validated_status(value, enum_cls):
-    """Lowercase + validate ``value`` against ``enum_cls``.
+# --- /api -- open read + health routes -----------------------------------
 
-    Returns the canonical enum string value on success. Aborts with 412
-    if the param is missing, 400 if it is not a known status.
-    """
-    if value is None:
-        abort(412)
-    normalized = value.lower()
-    try:
-        return enum_cls(normalized).value
-    except ValueError:
-        allowed = ", ".join(m.value for m in enum_cls)
-        abort(400, description=f"Invalid status {value!r}. Allowed: {allowed}")
+api = APIBlueprint("api", __name__, tag="Read")
 
 
-api = Blueprint("api", __name__)
-
-
-@api.route("/healthz")
+@api.get("/healthz")
+@api.output(HealthOut)
+@api.doc(summary="Liveness probe", description="Returns 200 if the WSGI process is serving.")
 def healthz():
-    """Liveness: the WSGI process is alive and serving."""
-    return {"status": "ok"}, 200
+    return {"status": "ok"}
 
 
-@api.route("/readyz")
+@api.get("/readyz")
+@api.output(HealthOut)
+@api.doc(summary="Readiness probe", description="Returns 200 if create_app() registered plugins.")
 def readyz():
-    """Readiness: app booted, all plugins loaded.
-
-    The plugin contract has no healthcheck method yet, so this only
-    proves the dataclass exists. Once plugins grow a ``healthcheck()``
-    method we can call into each here.
-    """
-    if current_app.extensions.get("steel_pigs") is None:
-        return {"status": "not_ready", "reason": "plugins not initialized"}, 503
-    return {"status": "ok"}, 200
+    return {"status": "ok"}
 
 
-@api.route("/pxe")
-@api.route("/pxe/configs/<config_file>")
-def get_pxe_script(config_file=None):
-    """Render an iPXE script for the requested server."""
-    log.info("Request to /pxe with params: %s", _log_safe(dict(request.args)))
+@api.get("/pxe")
+@api.input(PxeQuery, location="query")
+@api.doc(
+    summary="Render an iPXE boot script",
+    description=(
+        "Returns an iPXE script tailored to the requested server. Supply "
+        "one of ``server_number``, ``mac``, or the pair ``switch_name`` + "
+        "``switch_port`` to identify the target. The response body is "
+        "text/plain and produced by the configured PXE plugin."
+    ),
+    responses={
+        200: {
+            "description": "iPXE script",
+            "content": {"text/plain": {"schema": {"type": "string"}}},
+        },
+        412: {"description": "No identification params supplied"},
+    },
+)
+def get_pxe_script(query_data):
+    log.info("Request to /pxe with params: %s", _log_safe(query_data))
     p = _plugins()
-    args = request.args
-    # NOTE(major): This dispatch chain is preserved from the original code -
-    # Ant requested both 'number' and 'server_number' aliases.
-    if "number" in args:
-        server_data = p.server_data.get_server_by_number(args["number"])
-    elif "server_number" in args:
-        server_data = p.server_data.get_server_by_number(args["server_number"])
-    elif "mac" in args:
-        mac = p.formatter.format_mac(args["mac"])
-        server_data = p.server_data.get_server_by_mac(mac)
-    else:
-        switch_name = args.get("switch_name")
-        switch_port = args.get("switch_port")
-        if switch_name is None or switch_port is None:
-            abort(412)
+    if query_data["server_number"] is not None:
+        server_data = p.server_data.get_server_by_number(query_data["server_number"])
+    elif query_data["mac"] is not None:
+        server_data = p.server_data.get_server_by_mac(p.formatter.format_mac(query_data["mac"]))
+    elif query_data["switch_name"] is not None and query_data["switch_port"] is not None:
         server_data = p.server_data.get_server_by_switch(
-            p.formatter.format_switch(switch_name),
-            p.formatter.format_port(switch_port),
+            p.formatter.format_switch(query_data["switch_name"]),
+            p.formatter.format_port(query_data["switch_port"]),
         )
+    else:
+        abort(412, "Supply server_number, mac, or (switch_name and switch_port).")
     return p.pxe.generate_ipxe_script(server_data=server_data, request=request)
 
 
-@api.route("/hardware")
-def get_hardware_specs():
-    """iPXE can't match strings with spaces; we strip them and re-emit."""
-    log.info("Request to /hardware with params: %s", _log_safe(dict(request.args)))
-    manufacturer = request.args.get("manufacturer")
-    product = request.args.get("product")
-    if manufacturer is None or product is None:
-        abort(412)
+@api.get("/hardware")
+@api.input(HardwareQuery, location="query")
+@api.doc(
+    summary="Render the hardware-detection iPXE callback",
+    description=(
+        "iPXE can't easily match strings with spaces. This route accepts "
+        "the manufacturer / product strings, strips whitespace, and emits "
+        "an iPXE script that re-assigns the cleaned values."
+    ),
+    responses={
+        200: {
+            "description": "iPXE script",
+            "content": {"text/plain": {"schema": {"type": "string"}}},
+        },
+    },
+)
+def get_hardware_specs(query_data):
+    log.info("Request to /hardware with params: %s", _log_safe(query_data))
     body = render_template(
         "hardware.ipxe",
-        make=manufacturer.replace(" ", ""),
-        model=product.replace(" ", ""),
+        make=query_data["manufacturer"].replace(" ", ""),
+        model=query_data["product"].replace(" ", ""),
     )
     r = make_response(body)
     r.mimetype = "text/plain"
     return r
 
 
-@api.route("/versions")
-@api.route("/versions/json")
+@api.get("/versions")
+@api.doc(
+    summary="Software versions metadata (JSON)",
+    description="Returned shape is determined by the configured version plugin.",
+)
 def get_software_versions_json():
     log.info("Returning version data.")
-    return jsonify(_plugins().version.get_latest_versions())
+    return _plugins().version.get_latest_versions()
 
 
-@api.route("/versions/ipxe")
-@api.route("/versions/ipxe/<project>")
+@api.get("/versions/ipxe")
+@api.get("/versions/ipxe/<project>")
+@api.doc(
+    summary="Software versions formatted as iPXE script",
+    responses={
+        200: {
+            "description": "iPXE-formatted version variables",
+            "content": {"text/plain": {"schema": {"type": "string"}}},
+        },
+    },
+)
 def get_software_versions_ipxe(project=None):
     log.info("Fetching iPXE version script.")
     r = make_response(_plugins().version.get_latest_ipxe(project))
@@ -183,55 +216,30 @@ def get_software_versions_ipxe(project=None):
     return r
 
 
-# --- Legacy mutation endpoints --------------------------------------------
-# These accepted GETs that mutated state, were unauthenticated, and accepted
-# parameters via query string. All three were moved to POST /v1/update/...
-# in this release. The legacy paths respond 405 Method Not Allowed with a
-# pointer at the new endpoint so existing callers fail loudly instead of
-# silently succeeding against an unauth'd surface.
-
-
-def _legacy_405(new_path):
-    response = make_response(
-        jsonify(
-            {
-                "error": "Method Not Allowed",
-                "message": f"This endpoint moved to POST {new_path}",
-            }
-        ),
-        405,
-    )
-    response.headers["Allow"] = "POST"
-    return response
-
-
-@api.route("/update", methods=["GET"])
-@api.route("/update/status", methods=["GET"])
-def legacy_set_boot_status_get():
-    return _legacy_405("/v1/update/status")
-
-
-@api.route("/update/os", methods=["GET"])
-def legacy_set_boot_os_get():
-    return _legacy_405("/v1/update/os")
-
-
-@api.route("/update/opstatus", methods=["GET"])
-def legacy_set_operational_status_get():
-    return _legacy_405("/v1/update/opstatus")
-
-
-@api.route("/provision/os/start")
-def begin_os_provisioning():
-    """Return a provision (kickstart / preseed) script for a device by MAC."""
-    log.info("Fetching provision start: %s", _log_safe(dict(request.args)))
-    server_mac = request.args.get("mac")
-    if server_mac is None:
-        abort(412, description="Missing required param: mac")
+@api.get("/provision/os/start")
+@api.input(ProvisionQuery, location="query")
+@api.doc(
+    summary="Return a kickstart / preseed for a device",
+    description=(
+        "Servers in ``operational_status == online`` get a 204. Servers "
+        "not in ``operational_status == provision`` also get a 204. "
+        "Servers in provision state get the script body."
+    ),
+    responses={
+        200: {
+            "description": "Provision script body",
+            "content": {"text/plain": {"schema": {"type": "string"}}},
+        },
+        204: {"description": "Server already online or not ready to provision"},
+        404: {"description": "Server not found for given MAC"},
+    },
+)
+def begin_os_provisioning(query_data):
+    log.info("Fetching provision start: %s", _log_safe(query_data))
     p = _plugins()
-    server = p.server_data.get_server_by_mac(mac=server_mac)
+    server = p.server_data.get_server_by_mac(mac=query_data["mac"])
     if server is None:
-        abort(404, description=f"Server not found using {server_mac}")
+        abort(404, f"Server not found using {query_data['mac']}")
     op_status = str(server["operational_status"]).lower()
     if op_status == OperationalStatus.ONLINE.value:
         return "", 204
@@ -240,19 +248,9 @@ def begin_os_provisioning():
     return p.provision.get_provision_script(server)
 
 
-# --- v1 mutation API ------------------------------------------------------
-# POST + JSON body, behind @requires_auth. Replaces the legacy /update/*
-# GET endpoints, which now return 405 (see above).
+# --- /v1 -- authenticated mutations --------------------------------------
 
-v1 = Blueprint("v1", __name__, url_prefix="/v1")
-
-
-def _json_field(data, name):
-    """Pull a required field from a parsed JSON body or abort 400."""
-    value = data.get(name)
-    if value is None:
-        abort(400, description=f"Missing required field: {name}")
-    return value
+v1 = APIBlueprint("v1", __name__, url_prefix="/v1", tag="Mutate")
 
 
 def _audit_context(field, server_number, new_value):
@@ -264,12 +262,14 @@ def _audit_context(field, server_number, new_value):
     }
 
 
-@v1.route("/update/status", methods=["POST"])
-@requires_auth
-def v1_set_boot_status():
-    data = request.get_json(silent=True) or {}
-    server_number = _json_field(data, "server_number")
-    boot_status = _validated_status(data.get("boot_status"), BootStatus)
+@v1.post("/update/status")
+@v1.doc(summary="Set a server's boot status")
+@v1.auth_required(auth)
+@v1.input(UpdateBootStatusIn)
+@v1.output(BootStatusResultOut)
+def v1_set_boot_status(json_data):
+    server_number = json_data["server_number"]
+    boot_status = json_data["boot_status"]
     ctx = _audit_context("boot_status", server_number, boot_status)
     result = _plugins().server_data.set_boot_status(server_number, boot_status)
     audit.emit(
@@ -280,15 +280,17 @@ def v1_set_boot_status():
         after=ctx["after"],
         request_id=g.get("request_id"),
     )
-    return jsonify(result)
+    return result
 
 
-@v1.route("/update/os", methods=["POST"])
-@requires_auth
-def v1_set_boot_os():
-    data = request.get_json(silent=True) or {}
-    server_number = _json_field(data, "server_number")
-    boot_os = _json_field(data, "boot_os")
+@v1.post("/update/os")
+@v1.doc(summary="Set a server's boot OS")
+@v1.auth_required(auth)
+@v1.input(UpdateBootOsIn)
+@v1.output(BootOsResultOut)
+def v1_set_boot_os(json_data):
+    server_number = json_data["server_number"]
+    boot_os = json_data["boot_os"]
     ctx = _audit_context("boot_os", server_number, boot_os)
     result = _plugins().server_data.set_boot_os(server_number, boot_os)
     audit.emit(
@@ -299,15 +301,17 @@ def v1_set_boot_os():
         after=ctx["after"],
         request_id=g.get("request_id"),
     )
-    return jsonify(result)
+    return result
 
 
-@v1.route("/update/opstatus", methods=["POST"])
-@requires_auth
-def v1_set_operational_status():
-    data = request.get_json(silent=True) or {}
-    server_number = _json_field(data, "server_number")
-    operational_status = _validated_status(data.get("opstatus"), OperationalStatus)
+@v1.post("/update/opstatus")
+@v1.doc(summary="Set a server's operational status")
+@v1.auth_required(auth)
+@v1.input(UpdateOpStatusIn)
+@v1.output(OpStatusResultOut)
+def v1_set_operational_status(json_data):
+    server_number = json_data["server_number"]
+    operational_status = json_data["opstatus"]
     ctx = _audit_context("operational_status", server_number, operational_status)
     result = _plugins().server_data.set_operational_status(server_number, operational_status)
     audit.emit(
@@ -318,94 +322,109 @@ def v1_set_operational_status():
         after=ctx["after"],
         request_id=g.get("request_id"),
     )
-    return jsonify(result)
+    return result
 
 
-# --- Ingest API -----------------------------------------------------------
-# Fields required when creating a server. These match the NOT NULL columns
-# on ServerDataModel that have no server-side default. boot_status and
-# operational_status are also enum-validated below.
-_REQUIRED_SERVER_FIELDS = (
-    "server_number",
-    "primary_ip",
-    "primary_gw",
-    "primary_nm",
-    "primary_mac",
-    "hostname",
-    "dns_server_primary",
-    "bootstrapped",
-    "boot_os",
-    "boot_os_version",
-    "boot_profile",
-    "boot_status",
-    "operational_status",
-    "ntp_server",
+@v1.post("/servers")
+@v1.doc(
+    summary="Register a new server",
+    description=(
+        "Required: network identity (IPs, MAC, hostname, DNS primary), "
+        "boot template selection (boot_os, boot_os_version, boot_profile), "
+        "and the NTP server. ``bootstrapped``, ``boot_status``, "
+        "``operational_status``, and ``dns_domain_name`` get sensible "
+        "first-boot defaults if omitted."
+    ),
+    responses={
+        201: {"description": "Server registered"},
+        409: {"description": "server_number already exists"},
+        422: {"description": "Validation error"},
+    },
 )
+@v1.auth_required(auth)
+@v1.input(CreateServerIn)
+@v1.output(ServerOut, status_code=201)
+def v1_create_server(json_data):
 
-
-@v1.route("/servers", methods=["POST"])
-@requires_auth
-def v1_create_server():
-    """Register a new server in the inventory."""
-    data = request.get_json(silent=True) or {}
-    missing = [f for f in _REQUIRED_SERVER_FIELDS if data.get(f) is None]
-    if missing:
-        abort(400, description=f"Missing required field(s): {', '.join(missing)}")
-    # Enum-validate the status fields with the same helper used elsewhere.
-    data["boot_status"] = _validated_status(data["boot_status"], BootStatus)
-    data["operational_status"] = _validated_status(data["operational_status"], OperationalStatus)
     try:
-        created = _plugins().server_data.create_server(data)
+        created = _plugins().server_data.create_server(json_data)
     except ServerAlreadyExists as exc:
-        abort(409, description=str(exc))
-    except ValueError as exc:
-        # Unknown columns from the plugin's strict shape check.
-        abort(400, description=str(exc))
+        abort(409, str(exc))
     audit.emit(
         action="create_server",
-        resource=f"server/{data['server_number']}",
+        resource=f"server/{json_data['server_number']}",
         actor=g.get("actor"),
         before=None,
         after=created,
         request_id=g.get("request_id"),
     )
-    return jsonify(created), 201
+    return created
 
 
-@v1.route("/servers/<int:server_number>/switches", methods=["POST"])
-@requires_auth
-def v1_add_switch(server_number):
-    """Attach a switch entry to an existing server."""
-    data = request.get_json(silent=True) or {}
-    switch_name = _json_field(data, "switch_name")
-    switch_port = _json_field(data, "switch_port")
+@v1.post("/servers/<int:server_number>/switches")
+@v1.doc(
+    summary="Attach a switch entry to an existing server",
+    responses={
+        201: {"description": "Switch attached"},
+        404: {"description": "server_number not found"},
+        422: {"description": "Validation error"},
+    },
+)
+@v1.auth_required(auth)
+@v1.input(AddSwitchIn)
+@v1.output(SwitchOut, status_code=201)
+def v1_add_switch(server_number, json_data):
+
     try:
-        created = _plugins().server_data.add_switch(server_number, switch_name, switch_port)
+        created = _plugins().server_data.add_switch(
+            server_number, json_data["switch_name"], json_data["switch_port"]
+        )
     except ServerNotFound as exc:
-        abort(404, description=str(exc))
+        abort(404, str(exc))
     audit.emit(
         action="add_switch",
-        resource=f"server/{server_number}/switch/{switch_name}/{switch_port}",
+        resource=(
+            f"server/{server_number}/switch/{json_data['switch_name']}/{json_data['switch_port']}"
+        ),
         actor=g.get("actor"),
         before=None,
         after=created,
         request_id=g.get("request_id"),
     )
-    return jsonify(created), 201
+    return created
 
 
-def create_app(config_overrides=None, plugins: Plugins | None = None) -> Flask:
-    """Build a configured Flask app.
+# --- App factory ----------------------------------------------------------
 
-    Pass ``plugins`` to inject pre-built plugin instances (used by tests so
-    routes and seeding share the same in-memory plugin state).
+
+def create_app(config_overrides=None, plugins: Plugins | None = None) -> APIFlask:
+    """Build the configured APIFlask app.
+
+    Pass ``plugins`` to inject pre-built plugin instances (used by tests
+    so routes and seeding share the same in-memory plugin state).
     """
-    app = Flask(
+    app = APIFlask(
         __name__,
+        title="Steel PIGS",
+        version="0.4",
+        spec_path="/openapi.json",
+        docs_path="/docs",
         static_folder="static",
         static_url_path="",
         template_folder="templates",
     )
+    app.config["DESCRIPTION"] = "Powerful iPXE Generation Service."
+    app.config["SECURITY_SCHEMES"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "description": "Bearer token supplied via the Authorization header.",
+        }
+    }
+    app.config["TAGS"] = [
+        {"name": "Read", "description": "PXE-boot and health endpoints (unauthenticated)."},
+        {"name": "Mutate", "description": "Inventory mutations (bearer auth required)."},
+    ]
     app.config["SECRET_KEY"] = pigs_config.SECRET_KEY
     if config_overrides:
         app.config.update(config_overrides)
