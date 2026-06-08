@@ -92,3 +92,28 @@ class ProviderPluginBase(abc.ABC):
         :return: void method
         """
         return
+
+    @abc.abstractmethod
+    def create_server(self, server_data):
+        """Insert a new server record.
+
+        :param server_data: dict matching the server schema. Required
+            keys are validated at the route boundary, not here.
+        :return: the inserted server as a dict (including any
+            server-side defaults / generated id).
+        :raises ServerAlreadyExists: if ``server_data['server_number']``
+            is taken.
+        """
+        return
+
+    @abc.abstractmethod
+    def add_switch(self, server_number, switch_name, switch_port):
+        """Attach a switch entry to an existing server.
+
+        :param server_number: the server the switch entry belongs to
+        :param switch_name: the switch identifier
+        :param switch_port: the port identifier
+        :return: the inserted switch entry as a dict
+        :raises ServerNotFound: if ``server_number`` doesn't exist.
+        """
+        return

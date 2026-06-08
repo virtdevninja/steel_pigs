@@ -33,6 +33,7 @@ from flask_bootstrap import Bootstrap5
 
 from . import audit, pigs_config
 from .auth import requires_auth
+from .exceptions.pigs_exceptions import ServerAlreadyExists, ServerNotFound
 from .pigs_app_settings.frontend import frontend
 from .states import BootStatus, OperationalStatus
 
@@ -320,6 +321,79 @@ def v1_set_operational_status():
     return jsonify(result)
 
 
+# --- Ingest API -----------------------------------------------------------
+# Fields required when creating a server. These match the NOT NULL columns
+# on ServerDataModel that have no server-side default. boot_status and
+# operational_status are also enum-validated below.
+_REQUIRED_SERVER_FIELDS = (
+    "server_number",
+    "primary_ip",
+    "primary_gw",
+    "primary_nm",
+    "primary_mac",
+    "hostname",
+    "dns_server_primary",
+    "bootstrapped",
+    "boot_os",
+    "boot_os_version",
+    "boot_profile",
+    "boot_status",
+    "operational_status",
+    "ntp_server",
+)
+
+
+@v1.route("/servers", methods=["POST"])
+@requires_auth
+def v1_create_server():
+    """Register a new server in the inventory."""
+    data = request.get_json(silent=True) or {}
+    missing = [f for f in _REQUIRED_SERVER_FIELDS if data.get(f) is None]
+    if missing:
+        abort(400, description=f"Missing required field(s): {', '.join(missing)}")
+    # Enum-validate the status fields with the same helper used elsewhere.
+    data["boot_status"] = _validated_status(data["boot_status"], BootStatus)
+    data["operational_status"] = _validated_status(data["operational_status"], OperationalStatus)
+    try:
+        created = _plugins().server_data.create_server(data)
+    except ServerAlreadyExists as exc:
+        abort(409, description=str(exc))
+    except ValueError as exc:
+        # Unknown columns from the plugin's strict shape check.
+        abort(400, description=str(exc))
+    audit.emit(
+        action="create_server",
+        resource=f"server/{data['server_number']}",
+        actor=g.get("actor"),
+        before=None,
+        after=created,
+        request_id=g.get("request_id"),
+    )
+    return jsonify(created), 201
+
+
+@v1.route("/servers/<int:server_number>/switches", methods=["POST"])
+@requires_auth
+def v1_add_switch(server_number):
+    """Attach a switch entry to an existing server."""
+    data = request.get_json(silent=True) or {}
+    switch_name = _json_field(data, "switch_name")
+    switch_port = _json_field(data, "switch_port")
+    try:
+        created = _plugins().server_data.add_switch(server_number, switch_name, switch_port)
+    except ServerNotFound as exc:
+        abort(404, description=str(exc))
+    audit.emit(
+        action="add_switch",
+        resource=f"server/{server_number}/switch/{switch_name}/{switch_port}",
+        actor=g.get("actor"),
+        before=None,
+        after=created,
+        request_id=g.get("request_id"),
+    )
+    return jsonify(created), 201
+
+
 def create_app(config_overrides=None, plugins: Plugins | None = None) -> Flask:
     """Build a configured Flask app.
 
@@ -362,4 +436,8 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Dev convenience only. Production runs via gunicorn -- see the
+    # Dockerfile and README. ``debug=True`` here would expose the
+    # Werkzeug debugger, an RCE vector if the dev server is ever
+    # reachable beyond localhost (CodeQL py/flask-debug, alert #1).
+    app.run(host="127.0.0.1")
