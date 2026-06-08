@@ -362,4 +362,8 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Dev convenience only. Production runs via gunicorn -- see the
+    # Dockerfile and README. ``debug=True`` here would expose the
+    # Werkzeug debugger, an RCE vector if the dev server is ever
+    # reachable beyond localhost (CodeQL py/flask-debug, alert #1).
+    app.run(host="127.0.0.1")
