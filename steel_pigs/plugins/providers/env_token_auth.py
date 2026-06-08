@@ -43,12 +43,8 @@ class EnvTokenAuth(AuthProviderBase):
                 "every request. Set the env var or swap in a real auth plugin."
             )
 
-    def authenticate(self, request):
-        if not self._expected:
-            return None
-        header = request.headers.get("Authorization", "")
-        scheme, _, token = header.partition(" ")
-        if scheme.lower() != "bearer" or not token:
+    def authenticate_token(self, token):
+        if not self._expected or not token:
             return None
         if hmac.compare_digest(token.strip(), self._expected):
             return "env-token"

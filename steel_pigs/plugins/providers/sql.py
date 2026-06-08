@@ -174,10 +174,7 @@ class SQL(ProviderPluginBase):
         log.info("Setting boot os on %s to %s", server_number, boot_os)
         if self._update_server_attr(server_number, "boot_os", boot_os) is None:
             log.info("Unable to locate %s to update boot os", server_number)
-            # NOTE: the original API used a different failure key here
-            # ('set_boot_os') than the success key ('os_set'). Preserved for
-            # backwards compatibility with any existing clients.
-            return {"operation": "failure", "set_boot_os": "unable to locate device"}
+            return {"operation": "failure", "os_set": "unable to locate device"}
         log.info("Updated boot os.")
         return {"operation": "success", "os_set": boot_os}
 

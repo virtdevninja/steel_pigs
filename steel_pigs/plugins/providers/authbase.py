@@ -18,12 +18,16 @@ import abc
 class AuthProviderBase(abc.ABC):
     """Plugin contract for request authentication.
 
-    Implementations decide whether an inbound Flask ``request`` is
-    authenticated, and if so return a string actor identity that gets
-    threaded into the audit log. Returning ``None`` causes the
-    ``@requires_auth`` decorator to respond with 401.
+    Implementations get the bearer token off the ``Authorization`` header
+    and return a string actor identity on success, or ``None`` to fail
+    the request with 401. The actor id is threaded into the audit log.
+
+    Plugin authors that need to look at more than the bearer token (e.g.,
+    an OIDC plugin that consumes a session cookie) can grab the full
+    request via ``flask.request`` -- the contract just guarantees the
+    token string is also passed in.
     """
 
     @abc.abstractmethod
-    def authenticate(self, request):
-        """Return a string actor id if authenticated, else None."""
+    def authenticate_token(self, token):
+        """Return a string actor id if ``token`` is valid, else ``None``."""

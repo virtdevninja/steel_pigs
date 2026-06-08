@@ -92,27 +92,27 @@ class TestCreateServer(_IngestTestBase):
 
     # --- validation -------------------------------------------------------
 
-    def test_missing_required_field_returns_400(self):
+    def test_missing_required_field_returns_422(self):
         payload = _valid_server_payload(server_number=999102)
         del payload["hostname"]
         rv = self.client.post("/v1/servers", json=payload, headers=self._auth())
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
-    def test_invalid_boot_status_returns_400(self):
+    def test_invalid_boot_status_returns_422(self):
         payload = _valid_server_payload(server_number=999103, boot_status="garbage")
         rv = self.client.post("/v1/servers", json=payload, headers=self._auth())
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
-    def test_invalid_operational_status_returns_400(self):
+    def test_invalid_operational_status_returns_422(self):
         payload = _valid_server_payload(server_number=999104, operational_status="bogus")
         rv = self.client.post("/v1/servers", json=payload, headers=self._auth())
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
-    def test_unknown_field_returns_400(self):
+    def test_unknown_field_returns_422(self):
         payload = _valid_server_payload(server_number=999105)
         payload["totally_made_up_field"] = "x"
         rv = self.client.post("/v1/servers", json=payload, headers=self._auth())
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
     # --- duplicates -------------------------------------------------------
 
@@ -154,21 +154,21 @@ class TestAddSwitch(_IngestTestBase):
         self.assertEqual(body["switch_name"], "sw-A")
         self.assertEqual(body["switch_port"], "1")
 
-    def test_missing_switch_name_returns_400(self):
+    def test_missing_switch_name_returns_422(self):
         rv = self.client.post(
             "/v1/servers/888001/switches",
             json={"switch_port": "5"},
             headers=self._auth(),
         )
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
-    def test_missing_switch_port_returns_400(self):
+    def test_missing_switch_port_returns_422(self):
         rv = self.client.post(
             "/v1/servers/888001/switches",
             json={"switch_name": "sw-X"},
             headers=self._auth(),
         )
-        self.assertEqual(rv.status_code, 400)
+        self.assertEqual(rv.status_code, 422)
 
     def test_nonexistent_server_returns_404(self):
         rv = self.client.post(

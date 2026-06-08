@@ -12,42 +12,46 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-"""Auth helpers used by mutation routes.
+"""Bearer auth wiring.
 
-``@requires_auth`` looks up the configured auth plugin via
-``current_app.extensions["steel_pigs"].auth``, calls ``authenticate(request)``,
-and either stores the actor id on ``flask.g`` for downstream code (the
-audit log reads ``g.actor``) or returns a 401 with ``WWW-Authenticate:
-Bearer``.
+APIFlask integrates HTTPTokenAuth with the OpenAPI security scheme
+publishing: routes decorated with ``@auth.login_required`` show up as
+``security: BearerAuth`` in the generated spec, and an unauthenticated
+request returns a 401 with ``WWW-Authenticate: Bearer``.
+
+``verify_token`` delegates to the configured auth plugin. The error
+handler emits an audit event for every 401 (missing header, wrong
+token, expired token) so the audit log is complete regardless of how
+auth failed.
 """
 
-from functools import wraps
-
-from flask import current_app, g, jsonify, make_response, request
+from apiflask import HTTPTokenAuth
+from flask import current_app, g, jsonify, request
 
 from . import audit
 
+auth = HTTPTokenAuth(scheme="Bearer", security_scheme_name="BearerAuth")
 
-def _unauthorized():
-    response = make_response(jsonify({"error": "Unauthorized"}), 401)
+
+@auth.verify_token
+def _verify_token(token):
+    plugins = current_app.extensions["steel_pigs"]
+    actor = plugins.auth.authenticate_token(token)
+    if actor is None:
+        return None
+    g.actor = actor
+    return actor
+
+
+@auth.error_handler
+def _auth_error(status_code):
+    audit.emit(
+        action="auth_failed",
+        resource=request.path,
+        actor=None,
+        request_id=g.get("request_id"),
+    )
+    response = jsonify({"message": "Unauthorized"})
+    response.status_code = status_code
     response.headers["WWW-Authenticate"] = "Bearer"
     return response
-
-
-def requires_auth(view):
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        plugins = current_app.extensions["steel_pigs"]
-        actor = plugins.auth.authenticate(request)
-        if actor is None:
-            audit.emit(
-                action="auth_failed",
-                resource=request.path,
-                actor=None,
-                request_id=g.get("request_id"),
-            )
-            return _unauthorized()
-        g.actor = actor
-        return view(*args, **kwargs)
-
-    return wrapper

@@ -37,6 +37,14 @@ Then probe the health endpoints ::
     curl http://localhost:8000/healthz
     curl http://localhost:8000/readyz
 
+Or open the Swagger UI in a browser to explore the full API
+interactively ::
+
+    http://localhost:8000/docs
+
+The raw OpenAPI 3 spec is served at ``/openapi.json`` for client codegen
+and CI checks.
+
 Hit a mutation endpoint with the dev token configured in ``compose.yaml`` ::
 
     curl -X POST http://localhost:8000/v1/update/status \
