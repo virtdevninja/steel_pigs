@@ -41,7 +41,7 @@ jobs:
         # the working tree state regardless.
         run: pre-commit run --all-files || true
 
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "Update pre-commit hook versions"
           title: "Update pre-commit hook versions"
