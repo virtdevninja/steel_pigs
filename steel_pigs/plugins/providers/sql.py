@@ -17,6 +17,7 @@ from contextlib import contextmanager
 
 from alembic import command
 from sqlalchemy import ForeignKey, String, create_engine, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -26,6 +27,7 @@ from sqlalchemy.orm import (
 )
 
 from steel_pigs.db import make_alembic_config
+from steel_pigs.exceptions.pigs_exceptions import ServerAlreadyExists, ServerNotFound
 
 from .pluginbase import ProviderPluginBase
 
@@ -185,6 +187,41 @@ class SQL(ProviderPluginBase):
             log.info("Unable to locate server %s", server_number)
             return {"operation": "failure", "status_set": "unable to locate device"}
         return {"operation": "success", "status_set": status}
+
+    def create_server(self, server_data):
+        """Insert a new server from a dict. See ProviderPluginBase."""
+        # Filter to known columns -- unexpected keys raise rather than
+        # silently dropping. This is the public API; surprises bite later.
+        known = {c.name for c in ServerDataModel.__table__.columns}
+        unknown = set(server_data) - known
+        if unknown:
+            raise ValueError(f"Unknown server fields: {sorted(unknown)}")
+        try:
+            with self._session_scope() as s:
+                row = ServerDataModel(**server_data)
+                s.add(row)
+                s.flush()
+                return _row_to_dict(row)
+        except IntegrityError as e:
+            raise ServerAlreadyExists(
+                f"server_number {server_data.get('server_number')!r} already exists"
+            ) from e
+
+    def add_switch(self, server_number, switch_name, switch_port):
+        """Attach a switch to an existing server. See ProviderPluginBase."""
+        stmt = select(ServerDataModel).where(ServerDataModel.server_number == server_number)
+        with self._session_scope() as s:
+            server = s.execute(stmt).scalar_one_or_none()
+            if server is None:
+                raise ServerNotFound(f"server_number {server_number!r} not found")
+            row = SwitchInfo(
+                server_number=server_number,
+                switch_name=switch_name,
+                switch_port=switch_port,
+            )
+            s.add(row)
+            s.flush()
+            return _row_to_dict(row)
 
     def create_entry(self, server_info):
         """Insert a ServerDataModel row. Intended for tests / data loading."""

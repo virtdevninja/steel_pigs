@@ -15,3 +15,11 @@
 
 class ProvisionException(Exception):
     pass
+
+
+class ServerAlreadyExists(Exception):
+    """Raised by ``create_server`` when the server_number is taken."""
+
+
+class ServerNotFound(Exception):
+    """Raised when an operation references a server that does not exist."""
